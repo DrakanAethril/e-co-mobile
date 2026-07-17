@@ -241,9 +241,13 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Text(_session.courseName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
-            ]),
+            Row(
+              children: [
+                Image.asset('assets/icons/eco/ic_launcher_96.png', width: 28, height: 28),
+                const SizedBox(width: 9),
+                Text(_session.courseName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+              ],
+            ),
             const SizedBox(height: 10),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
