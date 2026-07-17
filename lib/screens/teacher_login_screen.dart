@@ -63,13 +63,7 @@ class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
               const Spacer(),
               Row(
                 children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                    alignment: Alignment.center,
-                    child: const Text('e', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: EcoColors.blue)),
-                  ),
+                  Image.asset('assets/icons/eco/ic_launcher_96.png', width: 52, height: 52),
                   const SizedBox(width: 12),
                   const Text('e-CO', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w600, color: Colors.white)),
                 ],
