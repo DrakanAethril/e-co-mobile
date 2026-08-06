@@ -84,14 +84,11 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
     final bg = sos ? const Color(0xFFFBECEB) : (stale ? const Color(0xFFFAF1DD) : Colors.white);
     final border = sos ? const Color(0xFFECC4BD) : (stale ? const Color(0xFFECD9AD) : EcoColors.border);
 
-    String signal;
-    if (runner['appLeftSeconds'] != null) {
-      signal = 'hors app · il y a ${runner['appLeftSeconds']}s';
-    } else if (runner['lastSignalSeconds'] != null) {
-      signal = 'il y a ${runner['lastSignalSeconds']}s';
-    } else {
-      signal = '—';
-    }
+    // Worded server-side by App\Service\EcoLiveTrackingService, like the web live screen: the
+    // delay reads in the largest unit that stays legible ("il y a 18 min", not "il y a 1080s").
+    // The raw seconds are still in the payload for an older app, hence the fallback.
+    final signal = runner['signalLabel'] as String? ??
+        (runner['lastSignalSeconds'] != null ? 'il y a ${runner['lastSignalSeconds']}s' : '—');
 
     return Container(
       padding: const EdgeInsets.all(12),
