@@ -9,6 +9,8 @@ import 'theme.dart';
 import 'screens/splash_screen.dart';
 
 void main() {
+  disableEcoFontFetching();
+
   final api = ApiClient();
   final sessionStore = SessionStore();
   final queueDb = OfflineQueueDb();

@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 import '../services/api_client.dart';
 import '../services/session_store.dart';
 import '../theme.dart';
+import '../widgets/eco_widgets.dart';
 import 'join_screen.dart';
 import 'teacher_parcours_list_screen.dart';
 
-// Screen 4a - same shell as 3d, identifiant/mot de passe (moncampus LDAP account) instead of
-// pseudo/code. Reuses the exact same JWT login moncampus-mobile already has (POST /api/login).
+// Handoff screen 4a - the same shell as 3d, identifiant/mot de passe (moncampus LDAP account)
+// instead of pseudo/code. Reuses the exact same JWT login moncampus-mobile already has
+// (POST /api/login).
 class TeacherLoginScreen extends StatefulWidget {
   const TeacherLoginScreen({super.key});
 
@@ -20,8 +22,16 @@ class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscure = true;
+  bool _staySignedIn = true;
   bool _loading = false;
   String? _error;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _login() async {
     final username = _usernameController.text.trim();
@@ -38,8 +48,15 @@ class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
 
     try {
       final api = context.read<ApiClient>();
+      final sessionStore = context.read<SessionStore>();
       final jwt = await api.teacherLogin(username, password);
-      await context.read<SessionStore>().saveTeacherJwt(jwt);
+      // "Rester connecté" off means the JWT lives only as long as this run of the app: the
+      // splash screen reads the store, so not writing it is what makes the next launch ask again.
+      if (_staySignedIn) {
+        await sessionStore.saveTeacherJwt(jwt);
+      } else {
+        await sessionStore.clearTeacherJwt();
+      }
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => TeacherParcoursListScreen(jwt: jwt)),
@@ -53,91 +70,79 @@ class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: EcoColors.navy,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Column(
-            children: [
-              const Spacer(),
-              Row(
-                children: [
-                  Image.asset('assets/icons/eco/ic_launcher_96.png', width: 52, height: 52),
-                  const SizedBox(width: 12),
-                  const Text('e-CO', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w600, color: Colors.white)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Espace enseignant.\nConnectez-vous avec votre compte Campus Beaupeyrat.',
-                  style: TextStyle(color: Color(0xFF9FB5C8), fontSize: 14, height: 1.5),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.fromLTRB(0, 24, 0, 28),
-                decoration: const BoxDecoration(color: EcoColors.bg, borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text('Identifiant', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
-                      const SizedBox(height: 7),
-                      TextField(controller: _usernameController, textInputAction: TextInputAction.next),
-                      const SizedBox(height: 16),
-                      const Text('Mot de passe', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
-                      const SizedBox(height: 7),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: _obscure,
-                        onSubmitted: (_) => _login(),
-                        decoration: InputDecoration(
-                          suffixIcon: IconButton(
-                            icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                          ),
-                        ),
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 10),
-                        Text(_error!, style: const TextStyle(color: EcoColors.red, fontSize: 13)),
-                      ],
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loading ? null : _login,
-                        child: _loading
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Se connecter'),
-                      ),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: TextButton(
-                          onPressed: () => Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const JoinScreen()),
-                          ),
-                          child: const Text.rich(
-                            TextSpan(
-                              text: 'Coureur ? ',
-                              style: TextStyle(color: EcoColors.faint, fontSize: 12.5),
-                              children: [
-                                TextSpan(text: 'Rejoindre une course avec un code', style: TextStyle(color: EcoColors.blueDark, fontWeight: FontWeight.w600)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+    return EcoAuthShell(
+      pitch: 'Espace enseignant.\nConnectez-vous avec votre compte Campus Beaupeyrat.',
+      fields: [
+        const EcoFieldLabel('Identifiant'),
+        TextField(controller: _usernameController, textInputAction: TextInputAction.next),
+        const SizedBox(height: 16),
+        const EcoFieldLabel('Mot de passe'),
+        TextField(
+          controller: _passwordController,
+          obscureText: _obscure,
+          onSubmitted: (_) => _login(),
+          decoration: InputDecoration(
+            suffixIcon: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: EcoColors.faint),
+              onPressed: () => setState(() => _obscure = !_obscure),
+            ),
           ),
         ),
+        const SizedBox(height: 14),
+        _staySignedInRow(),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Text(_error!, style: EcoFont.sans(size: 13, color: EcoColors.red)),
+        ],
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: _loading ? null : _login,
+          child: _loading
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text('Se connecter', style: EcoFont.sans(size: 15, weight: FontWeight.w600, color: Colors.white)),
+        ),
+      ],
+      footer: Center(
+        child: TextButton(
+          onPressed: () => Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const JoinScreen()),
+          ),
+          child: Text.rich(
+            TextSpan(
+              text: 'Coureur ? ',
+              style: EcoFont.sans(size: 12.5, color: EcoColors.faint),
+              children: [
+                TextSpan(
+                  text: 'Rejoindre une course avec un code',
+                  style: EcoFont.sans(size: 12.5, weight: FontWeight.w600, color: EcoColors.blueDark),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _staySignedInRow() {
+    return InkWell(
+      onTap: () => setState(() => _staySignedIn = !_staySignedIn),
+      child: Row(
+        children: [
+          Container(
+            width: 17,
+            height: 17,
+            decoration: BoxDecoration(
+              color: _staySignedIn ? EcoColors.blue : Colors.white,
+              border: Border.all(color: _staySignedIn ? EcoColors.blue : EcoColors.border),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.center,
+            child: _staySignedIn ? const Icon(Icons.check, size: 11, color: Colors.white) : null,
+          ),
+          const SizedBox(width: 9),
+          Text('Rester connecté', style: EcoFont.sans(size: 13, color: const Color(0xFF3D4F5C))),
+        ],
       ),
     );
   }

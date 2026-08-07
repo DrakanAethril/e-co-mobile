@@ -50,6 +50,10 @@ class ApiClient {
   Future<Map<String, dynamic>> runnerJoin(String pseudo, String code) =>
       _post('/api/eco/runner/join', {'pseudo': pseudo, 'code': code});
 
+  /// What a course code resolves to, so screen 3d can confirm it as it is typed.
+  Future<Map<String, dynamic>> runnerCourseByCode(String code) =>
+      _get('/api/eco/runner/course?code=${Uri.encodeQueryComponent(code)}');
+
   Future<Map<String, dynamic>> runnerState(String token) =>
       _get('/api/eco/runner/state?token=$token');
 

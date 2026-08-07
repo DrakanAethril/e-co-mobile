@@ -4,12 +4,14 @@ import 'package:provider/provider.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/eco_widgets.dart';
+import 'teacher_locate_confirmation_screen.dart';
 import 'teacher_scan_camera_screen.dart';
 
-// Screens 4b (list) + 4c (confirmation) - the teacher walks to each checkpoint, scans its QR,
-// this posts the current GPS fix via App\Controller\Api\EcoTeacherApiController::locate(). Unlike
-// runner telemetry this isn't offline-queued: locating only ever happens with the teacher present
-// and online, and re-scanning simply overwrites the previous position (EcoCheckpoint::locate()).
+// Handoff screen 4b - the teacher walks to each checkpoint, scans its QR, and this posts the
+// current GPS fix via App\Controller\Api\EcoTeacherApiController::locate(). Unlike runner telemetry
+// this isn't offline-queued: locating only ever happens with the teacher present and online, and
+// re-scanning simply overwrites the previous position (EcoCheckpoint::locate()).
 class TeacherLocateScreen extends StatefulWidget {
   final String jwt;
   final int parcoursId;
@@ -40,7 +42,22 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
     });
   }
 
+  int get _locatedCount => _checkpoints.where((c) => c['located'] == true).length;
+
+  /// The first checkpoint still without a position - what both the bottom button and the
+  /// confirmation screen's "balise suivante" point at.
+  Map<String, dynamic>? get _nextToLocate {
+    for (final checkpoint in _checkpoints) {
+      if (checkpoint['located'] != true) return checkpoint;
+    }
+
+    return null;
+  }
+
   Future<void> _scanCheckpoint(Map<String, dynamic> checkpoint) async {
+    // Read off the provider before the first await: the widget can be gone by the time the camera
+    // and the GPS have both answered.
+    final api = context.read<ApiClient>();
     final shortCode = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const TeacherScanCameraScreen()),
     );
@@ -65,121 +82,235 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
     }
 
     try {
-      final api = context.read<ApiClient>();
       final json = await api.teacherLocateCheckpoint(widget.jwt, checkpoint['id'] as int, position.latitude, position.longitude);
       if (!mounted) return;
-      await _showConfirmation(checkpoint['name'] as String, position, json);
       await _load();
+      if (!mounted) return;
+
+      final next = _nextToLocate;
+      final scanNext = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => TeacherLocateConfirmationScreen(
+            parcoursName: widget.parcoursName,
+            checkpointName: checkpoint['name'] as String,
+            latitude: position!.latitude,
+            longitude: position.longitude,
+            accuracyMeters: position.accuracy,
+            toleranceMeters: (checkpoint['toleranceMeters'] as num?)?.toInt() ?? 20,
+            locatedCount: (json['locatedCount'] as num).toInt(),
+            totalCount: (json['totalCount'] as num).toInt(),
+            nextCheckpointLabel: next != null ? _shortLabel(next) : null,
+          ),
+        ),
+      );
+
+      if (scanNext == true && next != null && mounted) {
+        await _scanCheckpoint(next);
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Échec de l'enregistrement — vérifiez la connexion.")));
     }
   }
 
-  // Screen 4c
-  Future<void> _showConfirmation(String name, Position position, Map<String, dynamic> json) {
-    final locatedCount = json['locatedCount'];
-    final totalCount = json['totalCount'];
-    return showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: EcoColors.navyDark,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircleAvatar(radius: 34, backgroundColor: EcoColors.green, child: Icon(Icons.check, color: Colors.white, size: 36)),
-            const SizedBox(height: 14),
-            Text('$name localisée', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(10)),
-              child: Column(
-                children: [
-                  _confirmRow('Coordonnées', '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}'),
-                  _confirmRow('Précision GPS', '±${position.accuracy.round()} m'),
-                  _confirmRow('Progression', '$locatedCount/$totalCount localisées'),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK', style: TextStyle(color: Colors.white))),
+  @override
+  Widget build(BuildContext context) {
+    final total = _checkpoints.length;
+    final located = _locatedCount;
+    final next = _nextToLocate;
+
+    return Scaffold(
+      body: Column(
+        children: [
+          EcoScreenHeader(
+            title: widget.parcoursName,
+            subtitle: 'Localisation des balises',
+            trailing: total == 0
+                ? null
+                : EcoHeaderBadge(
+                    label: '$located/$total',
+                    background: located == total ? EcoColors.greenBg : EcoColors.goldBg,
+                    foreground: located == total ? EcoColors.greenTx : EcoColors.goldTx,
+                  ),
+          ),
+          if (!_loading && total > 0) _progress(located, total),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _checkpoints.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) => _checkpointTile(_checkpoints[index]),
+                  ),
+          ),
+          if (next != null) _bottomBar(next),
         ],
       ),
     );
   }
 
-  Widget _confirmRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(color: Color(0xFF9FB5C8), fontSize: 13)),
-            Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-          ],
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.parcoursName)),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _checkpoints.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final c = _checkpoints[index];
-                final located = c['located'] as bool;
-                return Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: located ? EcoColors.border : EcoColors.gold, width: located ? 1 : 1.5),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(color: located ? const Color(0xFFE3EDE6) : const Color(0xFFFAF1DD), borderRadius: BorderRadius.circular(9)),
-                        alignment: Alignment.center,
-                        child: Text(_shortLabel(c), style: TextStyle(fontWeight: FontWeight.bold, color: located ? const Color(0xFF25543C) : const Color(0xFF9A7729))),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(c['name'] as String, style: const TextStyle(fontWeight: FontWeight.w600)),
-                            Text(
-                              located ? '✓ ${(c['latitude'] as num).toStringAsFixed(4)}, ${(c['longitude'] as num).toStringAsFixed(4)}' : 'À localiser',
-                              style: TextStyle(fontSize: 11.5, color: located ? const Color(0xFF25543C) : const Color(0xFF9A7729)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (located)
-                        TextButton(onPressed: () => _scanCheckpoint(c), child: const Text('Re-scanner'))
-                      else
-                        ElevatedButton(onPressed: () => _scanCheckpoint(c), child: const Text('Scanner')),
-                    ],
-                  ),
-                );
-              },
+  Widget _progress(int located, int total) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: total == 0 ? 0 : located / total,
+              minHeight: 7,
+              backgroundColor: EcoColors.border,
+              valueColor: const AlwaysStoppedAnimation<Color>(EcoColors.gold),
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Posez chaque balise à l'endroit voulu puis scannez son QR pour enregistrer sa position. "
+            'Re-scanner une balise met à jour sa position.',
+            style: EcoFont.sans(size: 12, color: EcoColors.faint, height: 1.4),
+          ),
+        ],
+      ),
     );
   }
 
-  String _shortLabel(Map<String, dynamic> c) {
-    if (c['type'] == 'start') return 'D';
-    if (c['type'] == 'finish') return 'A';
-    return '${c['position']}';
+  Widget _checkpointTile(Map<String, dynamic> checkpoint) {
+    final located = checkpoint['located'] == true;
+    final tolerance = (checkpoint['toleranceMeters'] as num?)?.toInt();
+    final note = checkpoint['note'] as String?;
+
+    // The mockup spells out what makes a checkpoint special right next to its name: a landmark
+    // note, and a tolerance that was widened away from the parcours default.
+    final qualifiers = <String>[
+      if (note != null && note.isNotEmpty) note,
+      if (tolerance != null && tolerance != 20) 'tol. $tolerance m',
+    ];
+
+    return EcoCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      borderColor: located ? EcoColors.border : EcoColors.gold,
+      borderWidth: located ? 1 : 1.5,
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: _badgeBackground(checkpoint, located),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              _shortLabel(checkpoint),
+              style: EcoFont.spectral(size: 15, weight: FontWeight.w700, color: _badgeForeground(checkpoint, located)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    text: checkpoint['name'] as String,
+                    style: EcoFont.sans(size: 14, weight: FontWeight.w600),
+                    children: [
+                      if (qualifiers.isNotEmpty)
+                        TextSpan(
+                          text: ' (${qualifiers.join(' · ')})',
+                          style: EcoFont.sans(size: 11.5, color: EcoColors.faint),
+                        ),
+                    ],
+                  ),
+                ),
+                Text(
+                  located ? _locatedLabel(checkpoint) : 'À localiser',
+                  style: EcoFont.sans(size: 11.5, color: located ? EcoColors.greenTx : EcoColors.goldTx),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (located)
+            TextButton(
+              onPressed: () => _scanCheckpoint(checkpoint),
+              style: TextButton.styleFrom(foregroundColor: EcoColors.faint, padding: const EdgeInsets.symmetric(horizontal: 8)),
+              child: Text('Re-scanner', style: EcoFont.sans(size: 12, weight: FontWeight.w600, color: EcoColors.faint)),
+            )
+          else
+            ElevatedButton(
+              onPressed: () => _scanCheckpoint(checkpoint),
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8)),
+              child: Text('Scanner', style: EcoFont.sans(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomBar(Map<String, dynamic> next) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: EcoColors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _scanCheckpoint(next),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const EcoQrGlyph(size: 20, color: Colors.white),
+                const SizedBox(width: 10),
+                Text(
+                  'Scanner la prochaine balise',
+                  style: EcoFont.sans(size: 15, weight: FontWeight.w600, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _locatedLabel(Map<String, dynamic> checkpoint) {
+    final latitude = (checkpoint['latitude'] as num).toStringAsFixed(4);
+    final longitude = (checkpoint['longitude'] as num).toStringAsFixed(4);
+    final locatedAt = checkpoint['locatedAt'] as String?;
+    if (locatedAt == null) return '✓ $latitude, $longitude';
+
+    final at = DateTime.tryParse(locatedAt)?.toLocal();
+    if (at == null) return '✓ $latitude, $longitude';
+
+    final day = '${at.day.toString().padLeft(2, '0')}/${at.month.toString().padLeft(2, '0')}';
+    final time = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+
+    return '✓ $latitude, $longitude · $day $time';
+  }
+
+  Color _badgeBackground(Map<String, dynamic> checkpoint, bool located) {
+    if (checkpoint['type'] != 'checkpoint') return EcoColors.blueBg;
+
+    return located ? EcoColors.greenBg : EcoColors.goldBg;
+  }
+
+  Color _badgeForeground(Map<String, dynamic> checkpoint, bool located) {
+    if (checkpoint['type'] != 'checkpoint') return EcoColors.blueDark;
+
+    return located ? EcoColors.greenTx : EcoColors.goldTx;
+  }
+
+  String _shortLabel(Map<String, dynamic> checkpoint) {
+    if (checkpoint['type'] == 'start') return 'D';
+    if (checkpoint['type'] == 'finish') return 'A';
+
+    return '${checkpoint['position']}';
   }
 }
