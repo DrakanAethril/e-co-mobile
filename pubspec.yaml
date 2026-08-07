@@ -47,6 +47,9 @@ dependencies:
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
   provider: ^6.1.5+1
+  # The handoff's Spectral (titles) and Source Sans 3 (body), pre-bundled under
+  # assets/google_fonts/ - no network fetching at all (see disableEcoFontFetching).
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -73,6 +76,9 @@ flutter:
   uses-material-design: true
 
   assets:
+    # Picked up by google_fonts as pre-bundled families (no `fonts:` entry, that is how the
+    # package expects them).
+    - assets/google_fonts/
     - assets/icons/eco/ic_launcher_48.png
     - assets/icons/eco/ic_launcher_72.png
     - assets/icons/eco/ic_launcher_96.png
