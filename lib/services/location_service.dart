@@ -40,6 +40,10 @@ class LocationService {
       await _queue.enqueue('position', {
         'latitude': position.latitude,
         'longitude': position.longitude,
+        // Altitude en mètres. Certains appareils n'en donnent pas et renvoient 0 : le serveur
+        // accepte l'absence du champ, autant ne rien envoyer plutôt qu'un zéro qui ferait croire
+        // à un parcours au niveau de la mer.
+        if (position.altitude != 0) 'altitude': position.altitude,
         'recordedAt': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (_) {
