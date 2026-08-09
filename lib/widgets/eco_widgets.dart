@@ -294,3 +294,46 @@ class EcoHeaderBadge extends StatelessWidget {
     );
   }
 }
+
+/// The OpenStreetMap credit that must sit on top of every map.
+///
+/// This is a licence obligation, not decoration: the tiles come from OpenStreetMap, whose data is
+/// published under the ODbL, which requires the credit to be visible wherever the map is shown.
+/// Keep it on any new map screen. [trailing] appends a screen-specific detail after a middot (the
+/// live-tracking screen uses it for its refresh cadence) without displacing the credit itself.
+class EcoMapAttribution extends StatelessWidget {
+  final String? trailing;
+  final Alignment alignment;
+
+  const EcoMapAttribution({
+    super.key,
+    this.trailing,
+    this.alignment = Alignment.topRight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = trailing == null
+        ? '© OpenStreetMap contributors'
+        : '© OpenStreetMap contributors · $trailing';
+
+    return Align(
+      alignment: alignment,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.94),
+            border: Border.all(color: EcoColors.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: EcoFont.sans(size: 9.5, weight: FontWeight.w600, color: EcoColors.faint),
+          ),
+        ),
+      ),
+    );
+  }
+}

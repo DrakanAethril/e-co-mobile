@@ -64,6 +64,7 @@ class MapScreen extends StatelessWidget {
                         userAgentPackageName: 'com.beaupeyrat.eco',
                       ),
                       MarkerLayer(markers: visible.map((c) => _markerFor(c, validated)).toList()),
+                      const EcoMapAttribution(),
                     ],
                   ),
           ),
