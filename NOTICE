@@ -36,8 +36,9 @@ This app displays map tiles from OpenStreetMap
     Map data (c) OpenStreetMap contributors, available under the Open Database
     License (ODbL) - https://www.openstreetmap.org/copyright
 
-That credit must be visible to users wherever a map is shown. See the README for
-the current state of this obligation in the app.
+That credit must be visible to users wherever a map is shown. In this app it is
+rendered by the shared EcoMapAttribution widget (lib/widgets/eco_widgets.dart),
+which every map screen includes. Keep it on any map added later.
 
 Use of OpenStreetMap's own tile servers is additionally subject to the OSM Tile
 Usage Policy (https://operations.osmfoundation.org/policies/tiles/), which is

@@ -14,8 +14,8 @@ with the GPL family. It should stay permissively licensed.
 Institution Beaupeyrat's names and logos are not covered by the licence, and the bundled fonts carry
 their own SIL Open Font License — see [NOTICE](NOTICE).
 
-> **Known gap.** The map screens render OpenStreetMap tiles but do not yet display the required
-> "© OpenStreetMap contributors" credit. Attribution is a condition of the ODbL and needs to be added
-> to `map_screen.dart` and `teacher_live_screen.dart` (flutter_map ships `RichAttribution` /
-> `TextSourceAttribution` for this). The app also fetches tiles straight from OpenStreetMap's own
-> servers, which their Tile Usage Policy reserves for modest traffic — see [NOTICE](NOTICE).
+> **Maps.** Tiles come from OpenStreetMap, so every map must display the "© OpenStreetMap
+> contributors" credit — a condition of the ODbL, not a courtesy. Use the shared `EcoMapAttribution`
+> widget (`lib/widgets/eco_widgets.dart`) on any new map screen. The app also fetches tiles straight
+> from OpenStreetMap's own servers, which their Tile Usage Policy reserves for modest traffic; a
+> dedicated tile provider is the right answer for sustained production use — see [NOTICE](NOTICE).

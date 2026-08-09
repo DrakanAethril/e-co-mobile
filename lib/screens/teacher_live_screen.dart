@@ -149,22 +149,7 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
             MarkerLayer(markers: _runners.where(_isOnMap).map(_runnerMarker).toList()),
           ],
         ),
-        Positioned(
-          right: 8,
-          top: 8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.94),
-              border: Border.all(color: EcoColors.border),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '© OpenStreetMap · 10 s',
-              style: EcoFont.sans(size: 9.5, weight: FontWeight.w600, color: EcoColors.faint),
-            ),
-          ),
-        ),
+        const EcoMapAttribution(trailing: '10 s'),
       ],
     );
   }
