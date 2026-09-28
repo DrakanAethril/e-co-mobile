@@ -6,7 +6,10 @@ import '../config.dart';
 class ApiException implements Exception {
   final int statusCode;
   final String error;
-  ApiException(this.statusCode, this.error);
+
+  /// The whole error body - e.g. the per-field messages of a refused course.
+  final Map<String, dynamic> data;
+  ApiException(this.statusCode, this.error, [this.data = const {}]);
 
   @override
   String toString() => 'ApiException($statusCode, $error)';
@@ -40,7 +43,7 @@ class ApiClient {
   Map<String, dynamic> _decode(http.Response response) {
     final data = jsonDecode(response.body.isEmpty ? '{}' : response.body) as Map<String, dynamic>;
     if (response.statusCode >= 400) {
-      throw ApiException(response.statusCode, data['error'] as String? ?? data['message'] as String? ?? 'unknown');
+      throw ApiException(response.statusCode, data['error'] as String? ?? data['message'] as String? ?? 'unknown', data);
     }
     return data;
   }
@@ -103,4 +106,20 @@ class ApiClient {
       _post('/api/eco/teacher/checkpoints/$checkpointId/locate', {'latitude': latitude, 'longitude': longitude}, jwt: jwt);
 
   Future<Map<String, dynamic>> teacherCourseLive(String jwt, int courseId) => _get('/api/eco/teacher/courses/$courseId/live', jwt: jwt);
+
+  /// The parcours whose every flag is located - the ones a course can be run on.
+  Future<Map<String, dynamic>> teacherReadyParcoursList(String jwt) => _get('/api/eco/teacher/parcours/ready', jwt: jwt);
+
+  /// A ready parcours' courses, plus the choices the creation form offers (worded server-side).
+  Future<Map<String, dynamic>> teacherParcoursCourses(String jwt, int parcoursId) =>
+      _get('/api/eco/teacher/parcours/$parcoursId/courses', jwt: jwt);
+
+  Future<Map<String, dynamic>> teacherCreateCourse(String jwt, int parcoursId, Map<String, dynamic> course) =>
+      _post('/api/eco/teacher/parcours/$parcoursId/courses', course, jwt: jwt);
+
+  Future<Map<String, dynamic>> teacherStartCourse(String jwt, int courseId) =>
+      _post('/api/eco/teacher/courses/$courseId/start', const {}, jwt: jwt);
+
+  Future<Map<String, dynamic>> teacherCloseCourse(String jwt, int courseId) =>
+      _post('/api/eco/teacher/courses/$courseId/close', const {}, jwt: jwt);
 }
