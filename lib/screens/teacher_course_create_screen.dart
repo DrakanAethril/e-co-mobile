@@ -9,13 +9,11 @@ import '../widgets/eco_widgets.dart';
 // their wording come from the server, the rules too (EcoCourseType): this screen only collects.
 // Pops with the created course, whose join code the server has just drawn.
 class TeacherCourseCreateScreen extends StatefulWidget {
-  final String jwt;
   final int parcoursId;
   final String parcoursName;
   final Map<String, dynamic> options;
   const TeacherCourseCreateScreen({
     super.key,
-    required this.jwt,
     required this.parcoursId,
     required this.parcoursName,
     required this.options,
@@ -79,7 +77,7 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
     final api = context.read<ApiClient>();
     final timeLimit = int.tryParse(_timeLimitController.text.trim());
     try {
-      final json = await api.teacherCreateCourse(widget.jwt, widget.parcoursId, {
+      final json = await api.teacherCreateCourse(widget.parcoursId, {
         'name': name,
         'mode': _mode,
         if (_timeLimited && timeLimit != null) 'timeLimitMinutes': timeLimit,

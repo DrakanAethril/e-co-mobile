@@ -14,10 +14,9 @@ import 'teacher_course_actions.dart';
 // same App\Service\EcoLiveTrackingService-shaped rows, the same 10 s beat, and the same map above
 // them - checkpoints as landmarks, one pill per runner at their last known position.
 class TeacherLiveScreen extends StatefulWidget {
-  final String jwt;
   final int courseId;
   final String courseName;
-  const TeacherLiveScreen({super.key, required this.jwt, required this.courseId, required this.courseName});
+  const TeacherLiveScreen({super.key, required this.courseId, required this.courseName});
 
   @override
   State<TeacherLiveScreen> createState() => _TeacherLiveScreenState();
@@ -47,7 +46,7 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
   Future<void> _poll() async {
     try {
       final api = context.read<ApiClient>();
-      final json = await api.teacherCourseLive(widget.jwt, widget.courseId);
+      final json = await api.teacherCourseLive(widget.courseId);
       if (!mounted) return;
       setState(() {
         _runners = (json['runners'] as List).cast<Map<String, dynamic>>();
@@ -123,7 +122,7 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
   }
 
   Future<void> _stop() async {
-    final closed = await confirmAndCloseCourse(context, widget.jwt, widget.courseId, widget.courseName);
+    final closed = await confirmAndCloseCourse(context, widget.courseId, widget.courseName);
     if (closed && mounted) Navigator.of(context).pop();
   }
 

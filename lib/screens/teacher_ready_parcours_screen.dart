@@ -9,8 +9,7 @@ import 'teacher_courses_screen.dart';
 // « Parcours prêts », the second tab of TeacherHomeScreen - the parcours whose every flag is
 // located, the only ones a course can be run on (the web screen 1g holds the same rule).
 class TeacherReadyParcoursScreen extends StatefulWidget {
-  final String jwt;
-  const TeacherReadyParcoursScreen({super.key, required this.jwt});
+  const TeacherReadyParcoursScreen({super.key});
 
   @override
   State<TeacherReadyParcoursScreen> createState() => _TeacherReadyParcoursScreenState();
@@ -27,7 +26,7 @@ class _TeacherReadyParcoursScreenState extends State<TeacherReadyParcoursScreen>
 
   Future<List<Map<String, dynamic>>> _load() async {
     final api = context.read<ApiClient>();
-    final json = await api.teacherReadyParcoursList(widget.jwt);
+    final json = await api.teacherReadyParcoursList();
     return (json['parcours'] as List).cast<Map<String, dynamic>>();
   }
 
@@ -87,7 +86,7 @@ class _TeacherReadyParcoursScreenState extends State<TeacherReadyParcoursScreen>
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context)
             .push(MaterialPageRoute(
-              builder: (_) => TeacherCoursesScreen(jwt: widget.jwt, parcoursId: parcours['id'] as int, parcoursName: parcours['name'] as String),
+              builder: (_) => TeacherCoursesScreen(parcoursId: parcours['id'] as int, parcoursName: parcours['name'] as String),
             ))
             .then((_) => _refresh()),
       ),

@@ -9,8 +9,7 @@ import 'teacher_locate_screen.dart';
 // « À localiser », the first tab of TeacherHomeScreen - parcours still needing checkpoints located
 // (screen 4b's list). Once every flag is located a parcours moves to « Parcours prêts ».
 class TeacherParcoursListScreen extends StatefulWidget {
-  final String jwt;
-  const TeacherParcoursListScreen({super.key, required this.jwt});
+  const TeacherParcoursListScreen({super.key});
 
   @override
   State<TeacherParcoursListScreen> createState() => _TeacherParcoursListScreenState();
@@ -27,7 +26,7 @@ class _TeacherParcoursListScreenState extends State<TeacherParcoursListScreen> {
 
   Future<List<Map<String, dynamic>>> _load() async {
     final api = context.read<ApiClient>();
-    final json = await api.teacherParcoursList(widget.jwt);
+    final json = await api.teacherParcoursList();
     return (json['parcours'] as List).cast<Map<String, dynamic>>();
   }
 
@@ -57,7 +56,7 @@ class _TeacherParcoursListScreenState extends State<TeacherParcoursListScreen> {
                   subtitle: Text('${p['locatedCount']}/${p['totalCount']} balises localisées'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => TeacherLocateScreen(jwt: widget.jwt, parcoursId: p['id'] as int, parcoursName: p['name'] as String)),
+                    MaterialPageRoute(builder: (_) => TeacherLocateScreen(parcoursId: p['id'] as int, parcoursName: p['name'] as String)),
                   ).then((_) => setState(() => _future = _load())),
                 ),
               );

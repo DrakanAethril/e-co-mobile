@@ -10,8 +10,7 @@ import 'teacher_live_screen.dart';
 // « En cours », the third tab of TeacherHomeScreen - every course running on this teacher's
 // parcours: open one to follow it live (4d), or stop it from here.
 class TeacherLiveListScreen extends StatefulWidget {
-  final String jwt;
-  const TeacherLiveListScreen({super.key, required this.jwt});
+  const TeacherLiveListScreen({super.key});
 
   @override
   State<TeacherLiveListScreen> createState() => _TeacherLiveListScreenState();
@@ -28,7 +27,7 @@ class _TeacherLiveListScreenState extends State<TeacherLiveListScreen> {
 
   Future<List<Map<String, dynamic>>> _load() async {
     final api = context.read<ApiClient>();
-    final json = await api.teacherCoursesInProgress(widget.jwt);
+    final json = await api.teacherCoursesInProgress();
     return (json['courses'] as List).cast<Map<String, dynamic>>();
   }
 
@@ -41,7 +40,7 @@ class _TeacherLiveListScreenState extends State<TeacherLiveListScreen> {
   }
 
   Future<void> _close(Map<String, dynamic> course) async {
-    final closed = await confirmAndCloseCourse(context, widget.jwt, course['id'] as int, course['name'] as String);
+    final closed = await confirmAndCloseCourse(context, course['id'] as int, course['name'] as String);
     if (closed && mounted) await _refresh();
   }
 
@@ -95,7 +94,7 @@ class _TeacherLiveListScreenState extends State<TeacherLiveListScreen> {
                       ],
                     ),
                     onTap: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => TeacherLiveScreen(jwt: widget.jwt, courseId: course['id'] as int, courseName: course['name'] as String)))
+                        .push(MaterialPageRoute(builder: (_) => TeacherLiveScreen(courseId: course['id'] as int, courseName: course['name'] as String)))
                         .then((_) => _refresh()),
                   ),
                 );

@@ -13,10 +13,9 @@ import 'teacher_scan_camera_screen.dart';
 // this isn't offline-queued: locating only ever happens with the teacher present and online, and
 // re-scanning simply overwrites the previous position (EcoCheckpoint::locate()).
 class TeacherLocateScreen extends StatefulWidget {
-  final String jwt;
   final int parcoursId;
   final String parcoursName;
-  const TeacherLocateScreen({super.key, required this.jwt, required this.parcoursId, required this.parcoursName});
+  const TeacherLocateScreen({super.key, required this.parcoursId, required this.parcoursName});
 
   @override
   State<TeacherLocateScreen> createState() => _TeacherLocateScreenState();
@@ -34,7 +33,7 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
 
   Future<void> _load() async {
     final api = context.read<ApiClient>();
-    final json = await api.teacherParcoursShow(widget.jwt, widget.parcoursId);
+    final json = await api.teacherParcoursShow(widget.parcoursId);
     if (!mounted) return;
     setState(() {
       _checkpoints = (json['checkpoints'] as List).cast<Map<String, dynamic>>();
@@ -82,7 +81,7 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
     }
 
     try {
-      final json = await api.teacherLocateCheckpoint(widget.jwt, checkpoint['id'] as int, position.latitude, position.longitude);
+      final json = await api.teacherLocateCheckpoint(checkpoint['id'] as int, position.latitude, position.longitude);
       // What the server read from the IGN for this spot - absent when the IGN was too slow to answer.
       final located = json['checkpoint'] is Map ? (json['checkpoint'] as Map).cast<String, dynamic>() : const <String, dynamic>{};
       if (!mounted) return;
