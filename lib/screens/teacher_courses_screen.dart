@@ -12,10 +12,9 @@ import 'teacher_live_screen.dart';
 // follow it live, stop it. The join code is shown large on every course still to be run, since
 // the teacher reads it out to the class from this screen.
 class TeacherCoursesScreen extends StatefulWidget {
-  final String jwt;
   final int parcoursId;
   final String parcoursName;
-  const TeacherCoursesScreen({super.key, required this.jwt, required this.parcoursId, required this.parcoursName});
+  const TeacherCoursesScreen({super.key, required this.parcoursId, required this.parcoursName});
 
   @override
   State<TeacherCoursesScreen> createState() => _TeacherCoursesScreenState();
@@ -38,7 +37,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   Future<void> _load() async {
     final api = context.read<ApiClient>();
     try {
-      final json = await api.teacherParcoursCourses(widget.jwt, widget.parcoursId);
+      final json = await api.teacherParcoursCourses(widget.parcoursId);
       if (!mounted) return;
       setState(() {
         _courses = (json['courses'] as List).cast<Map<String, dynamic>>();
@@ -59,7 +58,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     final created = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => TeacherCourseCreateScreen(
-          jwt: widget.jwt,
           parcoursId: widget.parcoursId,
           parcoursName: widget.parcoursName,
           options: _options,
@@ -76,7 +74,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
   Future<void> _start(Map<String, dynamic> course) async {
     setState(() => _busyCourseId = course['id'] as int);
-    await startCourse(context, widget.jwt, course['id'] as int);
+    await startCourse(context, course['id'] as int);
     if (!mounted) return;
     setState(() => _busyCourseId = null);
     await _load();
@@ -84,7 +82,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
   Future<void> _close(Map<String, dynamic> course) async {
     setState(() => _busyCourseId = course['id'] as int);
-    await confirmAndCloseCourse(context, widget.jwt, course['id'] as int, course['name'] as String);
+    await confirmAndCloseCourse(context, course['id'] as int, course['name'] as String);
     if (!mounted) return;
     setState(() => _busyCourseId = null);
     await _load();
@@ -93,7 +91,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   void _follow(Map<String, dynamic> course) {
     Navigator.of(context)
         .push(MaterialPageRoute(
-          builder: (_) => TeacherLiveScreen(jwt: widget.jwt, courseId: course['id'] as int, courseName: course['name'] as String),
+          builder: (_) => TeacherLiveScreen(courseId: course['id'] as int, courseName: course['name'] as String),
         ))
         .then((_) => _load());
   }

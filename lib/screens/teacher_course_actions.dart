@@ -10,11 +10,11 @@ import '../theme.dart';
 
 /// Starts a prepared course. Answers the course as the server now has it, or null on failure
 /// (already said in a snackbar).
-Future<Map<String, dynamic>?> startCourse(BuildContext context, String jwt, int courseId) async {
+Future<Map<String, dynamic>?> startCourse(BuildContext context, int courseId) async {
   final api = context.read<ApiClient>();
   final messenger = ScaffoldMessenger.of(context);
   try {
-    final json = await api.teacherStartCourse(jwt, courseId);
+    final json = await api.teacherStartCourse(courseId);
     messenger.showSnackBar(const SnackBar(content: Text('Course démarrée : les coureurs peuvent la rejoindre.')));
 
     return (json['course'] as Map).cast<String, dynamic>();
@@ -30,7 +30,7 @@ Future<Map<String, dynamic>?> startCourse(BuildContext context, String jwt, int 
 }
 
 /// Asks first, then closes a running course. Answers true once it is closed.
-Future<bool> confirmAndCloseCourse(BuildContext context, String jwt, int courseId, String courseName) async {
+Future<bool> confirmAndCloseCourse(BuildContext context, int courseId, String courseName) async {
   final api = context.read<ApiClient>();
   final messenger = ScaffoldMessenger.of(context);
 
@@ -58,7 +58,7 @@ Future<bool> confirmAndCloseCourse(BuildContext context, String jwt, int courseI
   if (confirmed != true) return false;
 
   try {
-    await api.teacherCloseCourse(jwt, courseId);
+    await api.teacherCloseCourse(courseId);
     messenger.showSnackBar(SnackBar(content: Text('« $courseName » est arrêtée.')));
 
     return true;

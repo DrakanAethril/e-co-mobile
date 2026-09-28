@@ -9,8 +9,7 @@ import 'teacher_ready_parcours_screen.dart';
 // tab each - lay the flags out (4b), run courses on the parcours that are ready, and watch / stop
 // the courses under way (4d).
 class TeacherHomeScreen extends StatefulWidget {
-  final String jwt;
-  const TeacherHomeScreen({super.key, required this.jwt});
+  const TeacherHomeScreen({super.key});
 
   @override
   State<TeacherHomeScreen> createState() => _TeacherHomeScreenState();
@@ -24,9 +23,9 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     // Only the visible tab is built, and rebuilt on every switch: a course started from « Parcours
     // prêts » must already be under « En cours » when the teacher turns to it.
     final tab = switch (_index) {
-      1 => TeacherReadyParcoursScreen(key: const ValueKey('ready'), jwt: widget.jwt),
-      2 => TeacherLiveListScreen(key: const ValueKey('live'), jwt: widget.jwt),
-      _ => TeacherParcoursListScreen(key: const ValueKey('locate'), jwt: widget.jwt),
+      1 => const TeacherReadyParcoursScreen(key: ValueKey('ready')),
+      2 => const TeacherLiveListScreen(key: ValueKey('live')),
+      _ => const TeacherParcoursListScreen(key: ValueKey('locate')),
     };
 
     return Scaffold(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/api_client.dart';
-import '../services/session_store.dart';
 import '../theme.dart';
 import '../widgets/eco_widgets.dart';
 import 'join_screen.dart';
@@ -49,19 +48,12 @@ class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
     });
 
     try {
-      final api = context.read<ApiClient>();
-      final sessionStore = context.read<SessionStore>();
-      final jwt = await api.teacherLogin(username, password);
-      // "Rester connecté" off means the JWT lives only as long as this run of the app: the
-      // splash screen reads the store, so not writing it is what makes the next launch ask again.
-      if (_staySignedIn) {
-        await sessionStore.saveTeacherJwt(jwt);
-      } else {
-        await sessionStore.clearTeacherJwt();
-      }
+      // "Rester connecté" off: the session lives only as long as this run of the app (ApiClient
+      // keeps it in memory and writes nothing), so the next launch asks again.
+      await context.read<ApiClient>().teacherLogin(username, password, staySignedIn: _staySignedIn);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => TeacherHomeScreen(jwt: jwt)),
+        MaterialPageRoute(builder: (_) => const TeacherHomeScreen()),
       );
     } catch (_) {
       setState(() => _error = 'Identifiant ou mot de passe incorrect.');

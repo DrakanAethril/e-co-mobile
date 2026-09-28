@@ -12,15 +12,14 @@ import 'screens/teacher_login_screen.dart';
 void main() {
   disableEcoFontFetching();
 
-  final api = ApiClient();
   final sessionStore = SessionStore();
+  final api = ApiClient(sessionStore: sessionStore);
   final queueDb = OfflineQueueDb();
   final navigatorKey = GlobalKey<NavigatorState>();
 
-  // A teacher call refused for its token: forget it, and start the teacher over at the login
-  // screen whatever they were looking at.
-  api.onTeacherSessionLost = () async {
-    await sessionStore.clearTeacherJwt();
+  // The teacher session ended under the teacher's feet (ApiClient has already forgotten it): start
+  // over at the login screen whatever they were looking at.
+  api.onTeacherSessionLost = () {
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const TeacherLoginScreen(notice: 'Votre session a expiré : reconnectez-vous.')),
       (_) => false,

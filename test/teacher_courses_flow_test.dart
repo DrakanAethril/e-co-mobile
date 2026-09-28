@@ -31,17 +31,17 @@ class _FakeApi extends ApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>> teacherParcoursList(String jwt) async => {'parcours': []};
+  Future<Map<String, dynamic>> teacherParcoursList() async => {'parcours': []};
 
   @override
-  Future<Map<String, dynamic>> teacherReadyParcoursList(String jwt) async => {
+  Future<Map<String, dynamic>> teacherReadyParcoursList() async => {
         'parcours': [
           {'id': 7, 'name': 'Bois de la Bastide', 'checkpointCount': 8, 'preparedCount': 0, 'inProgressCount': 0, 'closedCount': 0},
         ],
       };
 
   @override
-  Future<Map<String, dynamic>> teacherParcoursCourses(String jwt, int parcoursId) async => {
+  Future<Map<String, dynamic>> teacherParcoursCourses(int parcoursId) async => {
         'parcours': {'id': 7, 'name': 'Bois de la Bastide'},
         'courses': List.of(courses),
         'options': {
@@ -56,7 +56,7 @@ class _FakeApi extends ApiClient {
       };
 
   @override
-  Future<Map<String, dynamic>> teacherCreateCourse(String jwt, int parcoursId, Map<String, dynamic> course) async {
+  Future<Map<String, dynamic>> teacherCreateCourse(int parcoursId, Map<String, dynamic> course) async {
     lastCreated = course;
     final created = _course(courses.length + 1, course['name'] as String, 'prepared');
     courses.insert(0, created);
@@ -64,19 +64,19 @@ class _FakeApi extends ApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>> teacherStartCourse(String jwt, int courseId) async {
+  Future<Map<String, dynamic>> teacherStartCourse(int courseId) async {
     _setStatus(courseId, 'in_progress');
     return {'course': courses.firstWhere((c) => c['id'] == courseId)};
   }
 
   @override
-  Future<Map<String, dynamic>> teacherCloseCourse(String jwt, int courseId) async {
+  Future<Map<String, dynamic>> teacherCloseCourse(int courseId) async {
     _setStatus(courseId, 'closed');
     return {'course': courses.firstWhere((c) => c['id'] == courseId)};
   }
 
   @override
-  Future<Map<String, dynamic>> teacherCoursesInProgress(String jwt) async =>
+  Future<Map<String, dynamic>> teacherCoursesInProgress() async =>
       {'courses': courses.where((c) => c['status'] == 'in_progress').toList()};
 }
 
@@ -88,7 +88,7 @@ void main() {
     await tester.pumpWidget(
       Provider<ApiClient>.value(
         value: api,
-        child: MaterialApp(theme: ecoTheme(), home: const TeacherHomeScreen(jwt: 'jwt')),
+        child: MaterialApp(theme: ecoTheme(), home: const TeacherHomeScreen()),
       ),
     );
     await tester.pumpAndSettle();

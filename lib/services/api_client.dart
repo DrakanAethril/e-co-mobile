@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import 'jwt_expiry.dart';
+import 'session_store.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -15,19 +18,46 @@ class ApiException implements Exception {
   String toString() => 'ApiException($statusCode, $error)';
 }
 
+/// What reopening a remembered teacher session came to, at launch.
+enum TeacherRestore {
+  /// Nothing was remembered.
+  none,
+
+  /// Signed in again, or kept for when the network comes back.
+  restored,
+
+  /// The session is over (30 days idle, signed out from « Mon profil », account deactivated).
+  expired,
+}
+
 // Thin wrapper around moncampus's e-CO endpoints (see src/Controller/Api/EcoRunnerApiController.php
 // and EcoTeacherApiController.php in the moncampus repo). Runner calls are unauthenticated (a join
-// token is just a request-body field, not a header); teacher calls carry a JWT bearer token from
-// POST /api/login, same as the rest of moncampus-mobile.
+// token is just a request-body field, not a header).
+//
+// Teacher calls carry the JWT of POST /api/login, and **this class holds it**, with the refresh
+// token that comes with it (App\Security\MobileSessions): the JWT lasts an hour, a race can last
+// longer, so a JWT about to run out - or refused - is traded for the next one here, and the screens
+// never see a token at all. The refresh token rotates at every exchange, so exchanges never run two
+// at once. With « Rester connecté » the refresh token is kept in secure storage (SessionStore).
 class ApiClient {
-  /// Called when a teacher call is refused for its token - an hour has passed (LexikJWT's
-  /// token_ttl), or the server's key changed. Set once in main(): it sends the teacher back to the
-  /// login screen, rather than leaving every screen to swallow the error - the live safety view
-  /// would otherwise freeze on its last reading without saying so.
+  final SessionStore? _sessionStore;
+
+  ApiClient({SessionStore? sessionStore}) : _sessionStore = sessionStore;
+
+  /// Called when the teacher session ends under the teacher's feet - its refresh token refused
+  /// (30 days idle, signed out from « Mon profil », deactivated account). Set once in main(): it
+  /// sends the teacher back to the login screen rather than leaving every screen to swallow the
+  /// error - the live safety view would otherwise freeze on its last reading without saying so.
   void Function()? onTeacherSessionLost;
 
+  String? _accessToken;
+  String? _refreshToken;
+  bool _staySignedIn = false;
+  Future<bool>? _refreshing;
   // Several calls can be refused at once (a tab and its poll): the teacher is sent back once.
-  bool _teacherSessionLost = false;
+  bool _sessionLostReported = false;
+
+  bool get hasTeacherSession => _accessToken != null || _refreshToken != null;
 
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body, {String? jwt}) async {
     final response = await http.post(
@@ -38,7 +68,7 @@ class ApiClient {
       },
       body: jsonEncode(body),
     );
-    return _decode(response, teacher: jwt != null);
+    return _decode(response);
   }
 
   Future<Map<String, dynamic>> _get(String path, {String? jwt}) async {
@@ -46,15 +76,10 @@ class ApiClient {
       Uri.parse('$apiBaseUrl$path'),
       headers: {if (jwt != null) 'Authorization': 'Bearer $jwt'},
     );
-    return _decode(response, teacher: jwt != null);
+    return _decode(response);
   }
 
-  Map<String, dynamic> _decode(http.Response response, {bool teacher = false}) {
-    // Runner calls never carry a JWT: their 401 (invalidToken) is a race matter, not a session.
-    if (teacher && response.statusCode == 401 && !_teacherSessionLost) {
-      _teacherSessionLost = true;
-      onTeacherSessionLost?.call();
-    }
+  Map<String, dynamic> _decode(http.Response response) {
     final data = jsonDecode(response.body.isEmpty ? '{}' : response.body) as Map<String, dynamic>;
     if (response.statusCode >= 400) {
       throw ApiException(response.statusCode, data['error'] as String? ?? data['message'] as String? ?? 'unknown', data);
@@ -95,46 +120,188 @@ class ApiClient {
     await _post('/api/eco/runner/app-events', {'token': token, 'type': type});
   }
 
-  // --- Teacher (JWT) ---
+  // --- Teacher session ---
 
-  Future<String> teacherLogin(String username, String password) async {
+  Future<void> teacherLogin(String username, String password, {required bool staySignedIn}) async {
     final response = await http.post(
       Uri.parse('$apiBaseUrl/api/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode({'username': username, 'password': password, 'client': 'eco'}),
     );
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode >= 400 || data['token'] == null) {
       throw ApiException(response.statusCode, 'loginFailed');
     }
-    _teacherSessionLost = false;
-    return data['token'] as String;
+
+    _accessToken = data['token'] as String;
+    _refreshToken = data['refreshToken'] as String?;
+    _staySignedIn = staySignedIn;
+    _sessionLostReported = false;
+    // « Rester connecté » off: the session lives as long as this run of the app, and a launch
+    // after it must ask again - so nothing a previous session left may stay behind either.
+    await _sessionStore?.clearTeacherSession();
+    await _rememberRefreshToken();
   }
 
-  Future<Map<String, dynamic>> teacherParcoursList(String jwt) => _get('/api/eco/teacher/parcours', jwt: jwt);
+  /// Reopens the session « Rester connecté » kept. Without network the session is kept all the
+  /// same: the first call made once the network is back asks for a JWT.
+  Future<TeacherRestore> restoreTeacherSession() async {
+    final store = _sessionStore;
+    if (store == null) return TeacherRestore.none;
 
-  Future<Map<String, dynamic>> teacherCoursesInProgress(String jwt) => _get('/api/eco/teacher/courses/in-progress', jwt: jwt);
+    final refreshToken = await store.loadTeacherRefreshToken();
+    if (refreshToken == null) {
+      // e-CO 1.2.0 kept the JWT itself: used while it lasts, then the login screen comes back once.
+      final legacy = await store.takeLegacyTeacherJwt();
+      if (legacy == null) return TeacherRestore.none;
+      if (!isJwtUsable(legacy)) return TeacherRestore.expired;
+      _accessToken = legacy;
+      return TeacherRestore.restored;
+    }
 
-  Future<Map<String, dynamic>> teacherParcoursShow(String jwt, int id) => _get('/api/eco/teacher/parcours/$id', jwt: jwt);
+    _refreshToken = refreshToken;
+    _staySignedIn = true;
+    _sessionLostReported = false;
+    try {
+      await _refreshAccessToken();
+    } on _SessionRefused {
+      return TeacherRestore.expired;
+    } catch (_) {
+      // No network: kept, and asked again by the first call.
+    }
+    return TeacherRestore.restored;
+  }
 
-  Future<Map<String, dynamic>> teacherLocateCheckpoint(String jwt, int checkpointId, double latitude, double longitude) =>
-      _post('/api/eco/teacher/checkpoints/$checkpointId/locate', {'latitude': latitude, 'longitude': longitude}, jwt: jwt);
+  /// « Se déconnecter »: forgotten here, and closed on the server too - a refresh token the app
+  /// forgot but the server still honoured would stay usable for 30 days.
+  Future<void> teacherLogout() async {
+    final refreshToken = _refreshToken;
+    _forgetTeacherSession();
+    await _sessionStore?.clearTeacherSession();
+    if (refreshToken == null) return;
+    try {
+      await http
+          .post(
+            Uri.parse('$apiBaseUrl/api/token/revoke'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'refreshToken': refreshToken}),
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Offline: the session will end by itself after 30 idle days, or from « Mon profil ».
+    }
+  }
 
-  Future<Map<String, dynamic>> teacherCourseLive(String jwt, int courseId) => _get('/api/eco/teacher/courses/$courseId/live', jwt: jwt);
+  Future<Map<String, dynamic>> _teacherGet(String path) => _teacherCall((jwt) => _get(path, jwt: jwt));
+
+  Future<Map<String, dynamic>> _teacherPost(String path, Map<String, dynamic> body) =>
+      _teacherCall((jwt) => _post(path, body, jwt: jwt));
+
+  /// A teacher call: a JWT renewed beforehand when it is about to run out, and renewed once more
+  /// if the server refuses it anyway (its clock and ours need not agree to the second).
+  Future<Map<String, dynamic>> _teacherCall(Future<Map<String, dynamic>> Function(String? jwt) send) async {
+    if (_refreshToken != null && (_accessToken == null || !isJwtUsable(_accessToken!))) {
+      await _refreshAccessTokenOrLoseSession();
+    }
+
+    try {
+      return await send(_accessToken);
+    } on ApiException catch (e) {
+      if (e.statusCode != 401) rethrow;
+      if (_refreshToken != null) {
+        await _refreshAccessTokenOrLoseSession();
+        try {
+          return await send(_accessToken);
+        } on ApiException catch (retried) {
+          if (retried.statusCode == 401) _loseSession();
+          rethrow;
+        }
+      }
+      _loseSession();
+      rethrow;
+    }
+  }
+
+  Future<void> _refreshAccessTokenOrLoseSession() async {
+    try {
+      await _refreshAccessToken();
+    } on _SessionRefused {
+      _loseSession();
+      throw ApiException(401, 'sessionExpired');
+    }
+  }
+
+  /// One exchange at a time: a second one running alongside would present the refresh token the
+  /// first just replaced, which the server reads as a replay and answers by closing the session.
+  Future<bool> _refreshAccessToken() => _refreshing ??= _exchangeRefreshToken().whenComplete(() => _refreshing = null);
+
+  /// Throws [_SessionRefused] when the server refuses the refresh token; a network failure is left
+  /// to the caller (http's own exception), the session untouched.
+  Future<bool> _exchangeRefreshToken() async {
+    final refreshToken = _refreshToken;
+    if (refreshToken == null) return false;
+
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/api/token/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refreshToken': refreshToken}),
+    );
+    if (response.statusCode == 401) {
+      _forgetTeacherSession();
+      await _sessionStore?.clearTeacherSession();
+      throw _SessionRefused();
+    }
+    final data = _decode(response);
+    _accessToken = data['token'] as String;
+    _refreshToken = data['refreshToken'] as String;
+    await _rememberRefreshToken();
+    return true;
+  }
+
+  Future<void> _rememberRefreshToken() async {
+    if (_staySignedIn && _refreshToken != null) {
+      await _sessionStore?.saveTeacherRefreshToken(_refreshToken!);
+    }
+  }
+
+  void _loseSession() {
+    _forgetTeacherSession();
+    unawaited(_sessionStore?.clearTeacherSession());
+    if (_sessionLostReported) return;
+    _sessionLostReported = true;
+    onTeacherSessionLost?.call();
+  }
+
+  void _forgetTeacherSession() {
+    _accessToken = null;
+    _refreshToken = null;
+  }
+
+  // --- Teacher calls ---
+
+  Future<Map<String, dynamic>> teacherParcoursList() => _teacherGet('/api/eco/teacher/parcours');
+
+  Future<Map<String, dynamic>> teacherCoursesInProgress() => _teacherGet('/api/eco/teacher/courses/in-progress');
+
+  Future<Map<String, dynamic>> teacherParcoursShow(int id) => _teacherGet('/api/eco/teacher/parcours/$id');
+
+  Future<Map<String, dynamic>> teacherLocateCheckpoint(int checkpointId, double latitude, double longitude) =>
+      _teacherPost('/api/eco/teacher/checkpoints/$checkpointId/locate', {'latitude': latitude, 'longitude': longitude});
+
+  Future<Map<String, dynamic>> teacherCourseLive(int courseId) => _teacherGet('/api/eco/teacher/courses/$courseId/live');
 
   /// The parcours whose every flag is located - the ones a course can be run on.
-  Future<Map<String, dynamic>> teacherReadyParcoursList(String jwt) => _get('/api/eco/teacher/parcours/ready', jwt: jwt);
+  Future<Map<String, dynamic>> teacherReadyParcoursList() => _teacherGet('/api/eco/teacher/parcours/ready');
 
   /// A ready parcours' courses, plus the choices the creation form offers (worded server-side).
-  Future<Map<String, dynamic>> teacherParcoursCourses(String jwt, int parcoursId) =>
-      _get('/api/eco/teacher/parcours/$parcoursId/courses', jwt: jwt);
+  Future<Map<String, dynamic>> teacherParcoursCourses(int parcoursId) => _teacherGet('/api/eco/teacher/parcours/$parcoursId/courses');
 
-  Future<Map<String, dynamic>> teacherCreateCourse(String jwt, int parcoursId, Map<String, dynamic> course) =>
-      _post('/api/eco/teacher/parcours/$parcoursId/courses', course, jwt: jwt);
+  Future<Map<String, dynamic>> teacherCreateCourse(int parcoursId, Map<String, dynamic> course) =>
+      _teacherPost('/api/eco/teacher/parcours/$parcoursId/courses', course);
 
-  Future<Map<String, dynamic>> teacherStartCourse(String jwt, int courseId) =>
-      _post('/api/eco/teacher/courses/$courseId/start', const {}, jwt: jwt);
+  Future<Map<String, dynamic>> teacherStartCourse(int courseId) => _teacherPost('/api/eco/teacher/courses/$courseId/start', const {});
 
-  Future<Map<String, dynamic>> teacherCloseCourse(String jwt, int courseId) =>
-      _post('/api/eco/teacher/courses/$courseId/close', const {}, jwt: jwt);
+  Future<Map<String, dynamic>> teacherCloseCourse(int courseId) => _teacherPost('/api/eco/teacher/courses/$courseId/close', const {});
 }
+
+class _SessionRefused implements Exception {}

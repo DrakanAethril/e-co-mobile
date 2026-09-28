@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../screens/join_screen.dart';
-import '../services/session_store.dart';
+import '../services/api_client.dart';
 import '../theme.dart';
 
 /// « Se déconnecter », in the app bar of each tab of TeacherHomeScreen. Asked first: a tap by
 /// mistake in the middle of a course would mean typing the password again out in the field. The
-/// JWT is stateless, so signing out is forgetting it here - nothing to revoke on the server.
+/// session is closed on the server too (ApiClient.teacherLogout), not just forgotten here.
 class TeacherLogoutButton extends StatelessWidget {
   const TeacherLogoutButton({super.key});
 
@@ -21,7 +21,7 @@ class TeacherLogoutButton extends StatelessWidget {
   }
 
   Future<void> _logout(BuildContext context) async {
-    final sessionStore = context.read<SessionStore>();
+    final api = context.read<ApiClient>();
     final navigator = Navigator.of(context);
 
     final confirmed = await showDialog<bool>(
@@ -47,7 +47,7 @@ class TeacherLogoutButton extends StatelessWidget {
     );
     if (confirmed != true) return;
 
-    await sessionStore.clearTeacherJwt();
+    await api.teacherLogout();
     navigator.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const JoinScreen()), (_) => false);
   }
 }
