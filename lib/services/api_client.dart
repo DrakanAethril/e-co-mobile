@@ -289,6 +289,18 @@ class ApiClient {
 
   Future<Map<String, dynamic>> teacherParcoursShow(int id) => _teacherGet('/api/eco/teacher/parcours/$id');
 
+  /// Saves the radius of the parcours' flags: {"<checkpoint id>": metres}. Answers the parcours.
+  Future<Map<String, dynamic>> teacherSaveTolerances(int parcoursId, Map<String, int> tolerances) =>
+      _teacherPost('/api/eco/teacher/parcours/$parcoursId/tolerances', {'tolerances': tolerances});
+
+  /// The IGN's reading of the parcours (App\Service\Eco\EcoTerrainSheet in moncampus).
+  Future<Map<String, dynamic>> teacherParcoursTerrain(int parcoursId) =>
+      _teacherGet('/api/eco/teacher/parcours/$parcoursId/terrain');
+
+  /// Asks for a new reading; app:eco:read-terrain writes it within the minute.
+  Future<Map<String, dynamic>> teacherRequestTerrain(int parcoursId) =>
+      _teacherPost('/api/eco/teacher/parcours/$parcoursId/terrain', const {});
+
   Future<Map<String, dynamic>> teacherLocateCheckpoint(int checkpointId, double latitude, double longitude) =>
       _teacherPost('/api/eco/teacher/checkpoints/$checkpointId/locate', {'latitude': latitude, 'longitude': longitude});
 
