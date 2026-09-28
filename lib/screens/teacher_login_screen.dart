@@ -12,7 +12,9 @@ import 'teacher_home_screen.dart';
 // instead of pseudo/code. Reuses the exact same JWT login moncampus-mobile already has
 // (POST /api/login).
 class TeacherLoginScreen extends StatefulWidget {
-  const TeacherLoginScreen({super.key});
+  /// Why the teacher is back here without having asked - an expired session, say.
+  final String? notice;
+  const TeacherLoginScreen({super.key, this.notice});
 
   @override
   State<TeacherLoginScreen> createState() => _TeacherLoginScreenState();
@@ -73,6 +75,10 @@ class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
     return EcoAuthShell(
       pitch: 'Espace enseignant.\nConnectez-vous avec votre compte Campus Beaupeyrat.',
       fields: [
+        if (widget.notice != null) ...[
+          Text(widget.notice!, style: EcoFont.sans(size: 13, weight: FontWeight.w600, color: EcoColors.goldTx)),
+          const SizedBox(height: 14),
+        ],
         const EcoFieldLabel('Identifiant'),
         TextField(controller: _usernameController, textInputAction: TextInputAction.next),
         const SizedBox(height: 16),

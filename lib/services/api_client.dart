@@ -20,6 +20,15 @@ class ApiException implements Exception {
 // token is just a request-body field, not a header); teacher calls carry a JWT bearer token from
 // POST /api/login, same as the rest of moncampus-mobile.
 class ApiClient {
+  /// Called when a teacher call is refused for its token - an hour has passed (LexikJWT's
+  /// token_ttl), or the server's key changed. Set once in main(): it sends the teacher back to the
+  /// login screen, rather than leaving every screen to swallow the error - the live safety view
+  /// would otherwise freeze on its last reading without saying so.
+  void Function()? onTeacherSessionLost;
+
+  // Several calls can be refused at once (a tab and its poll): the teacher is sent back once.
+  bool _teacherSessionLost = false;
+
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body, {String? jwt}) async {
     final response = await http.post(
       Uri.parse('$apiBaseUrl$path'),
@@ -29,7 +38,7 @@ class ApiClient {
       },
       body: jsonEncode(body),
     );
-    return _decode(response);
+    return _decode(response, teacher: jwt != null);
   }
 
   Future<Map<String, dynamic>> _get(String path, {String? jwt}) async {
@@ -37,10 +46,15 @@ class ApiClient {
       Uri.parse('$apiBaseUrl$path'),
       headers: {if (jwt != null) 'Authorization': 'Bearer $jwt'},
     );
-    return _decode(response);
+    return _decode(response, teacher: jwt != null);
   }
 
-  Map<String, dynamic> _decode(http.Response response) {
+  Map<String, dynamic> _decode(http.Response response, {bool teacher = false}) {
+    // Runner calls never carry a JWT: their 401 (invalidToken) is a race matter, not a session.
+    if (teacher && response.statusCode == 401 && !_teacherSessionLost) {
+      _teacherSessionLost = true;
+      onTeacherSessionLost?.call();
+    }
     final data = jsonDecode(response.body.isEmpty ? '{}' : response.body) as Map<String, dynamic>;
     if (response.statusCode >= 400) {
       throw ApiException(response.statusCode, data['error'] as String? ?? data['message'] as String? ?? 'unknown', data);
@@ -93,6 +107,7 @@ class ApiClient {
     if (response.statusCode >= 400 || data['token'] == null) {
       throw ApiException(response.statusCode, 'loginFailed');
     }
+    _teacherSessionLost = false;
     return data['token'] as String;
   }
 

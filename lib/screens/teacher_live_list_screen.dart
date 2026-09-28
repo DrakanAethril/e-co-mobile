@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/teacher_logout_button.dart';
 import 'teacher_course_actions.dart';
 import 'teacher_live_screen.dart';
 
@@ -47,7 +48,7 @@ class _TeacherLiveListScreenState extends State<TeacherLiveListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Courses en cours')),
+      appBar: AppBar(title: const Text('Courses en cours'), actions: const [TeacherLogoutButton()]),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {
