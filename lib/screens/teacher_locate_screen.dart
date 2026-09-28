@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
 import '../widgets/eco_widgets.dart';
+import '../widgets/teacher_parcours_links.dart';
 import 'teacher_locate_confirmation_screen.dart';
 import 'teacher_scan_camera_screen.dart';
 
@@ -137,6 +138,7 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
                     foreground: located == total ? EcoColors.greenTx : EcoColors.goldTx,
                   ),
           ),
+          TeacherParcoursLinks(parcoursId: widget.parcoursId, parcoursName: widget.parcoursName, onReturn: _load),
           if (!_loading && total > 0) _progress(located, total),
           Expanded(
             child: _loading

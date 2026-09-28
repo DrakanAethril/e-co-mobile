@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
 import '../widgets/eco_widgets.dart';
+import '../widgets/teacher_parcours_links.dart';
 import 'teacher_course_actions.dart';
 import 'teacher_course_create_screen.dart';
 import 'teacher_live_screen.dart';
@@ -112,6 +113,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                     foreground: Colors.white,
                   ),
           ),
+          TeacherParcoursLinks(parcoursId: widget.parcoursId, parcoursName: widget.parcoursName),
           Expanded(child: _body()),
           if (!_loading && !_failed) _bottomBar(),
         ],
