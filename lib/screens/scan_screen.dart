@@ -132,7 +132,7 @@ class _ScanScreenState extends State<ScanScreen> {
           controller: controller,
           autofocus: true,
           textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(hintText: 'ex. VT-B04'),
+          decoration: const InputDecoration(hintText: 'ex. 7GX4K2A'),
           style: EcoFont.mono(size: 17, color: EcoColors.blueDark, letterSpacing: 2),
         ),
         actions: [

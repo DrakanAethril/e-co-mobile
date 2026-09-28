@@ -61,7 +61,7 @@ class RunnerSession {
             .toList(),
       );
 
-  RunnerSession copyWith({String? status, DateTime? startedAt, List<int>? validatedCheckpointIds}) => RunnerSession(
+  RunnerSession copyWith({String? status, DateTime? startedAt, DateTime? finishedAt, List<int>? validatedCheckpointIds}) => RunnerSession(
         runnerId: runnerId,
         token: token,
         pseudo: pseudo,
@@ -72,7 +72,7 @@ class RunnerSession {
         mapVisibility: mapVisibility,
         timeLimitMinutes: timeLimitMinutes,
         startedAt: startedAt ?? this.startedAt,
-        finishedAt: finishedAt,
+        finishedAt: finishedAt ?? this.finishedAt,
         validatedCheckpointIds: validatedCheckpointIds ?? this.validatedCheckpointIds,
         checkpoints: checkpoints,
       );

@@ -1,6 +1,7 @@
+// The server never sends a runner the checkpoint codes (typing one is what validates a flag), so
+// this model carries none: the QR or the typed code goes straight to POST /api/eco/runner/scan.
 class Checkpoint {
   final int id;
-  final String shortCode;
   final String name;
   final int position;
   final String type; // 'start' | 'checkpoint' | 'finish'
@@ -12,7 +13,6 @@ class Checkpoint {
 
   Checkpoint({
     required this.id,
-    required this.shortCode,
     required this.name,
     required this.position,
     required this.type,
@@ -34,7 +34,6 @@ class Checkpoint {
 
   factory Checkpoint.fromJson(Map<String, dynamic> json) => Checkpoint(
         id: json['id'] as int,
-        shortCode: json['shortCode'] as String,
         name: json['name'] as String,
         position: json['position'] as int,
         type: json['type'] as String,

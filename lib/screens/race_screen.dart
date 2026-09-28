@@ -13,6 +13,7 @@ import '../theme.dart';
 import '../widgets/eco_widgets.dart';
 import 'join_screen.dart';
 import 'map_screen.dart';
+import 'race_summary_screen.dart';
 import 'scan_screen.dart';
 
 // Handoff screens 1b (Ordre imposé) and 2b (Ordre libre): one shell - navy header with the
@@ -37,6 +38,10 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
   String? _lastScanMessage;
   _FeedbackTone _lastScanTone = _FeedbackTone.success;
   bool _online = true;
+  // The recap opens by itself once, the moment the finish is known - scanned here or confirmed
+  // by a refresh after an offline scan. Relaunching on a finished race does not reopen it: the
+  // finished card carries the button.
+  bool _summaryOpened = false;
 
   @override
   void initState() {
@@ -84,7 +89,9 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
   void _tickChrono() {
     final startedAt = _session.startedAt;
     if (startedAt == null || !mounted) return;
-    setState(() => _elapsed = DateTime.now().toUtc().difference(startedAt.toUtc()));
+    // Past the finish the chrono stops on the race's time instead of running on behind the recap.
+    final end = _session.finishedAt ?? DateTime.now();
+    setState(() => _elapsed = end.toUtc().difference(startedAt.toUtc()));
   }
 
   // Reconciles anything the app couldn't confirm synchronously (a scan made while offline) -
@@ -95,11 +102,13 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
       final api = context.read<ApiClient>();
       final json = await api.runnerState(_session.token);
       final refreshed = RunnerSession.fromJson(json);
+      final justFinished = _session.status != 'finished' && refreshed.status == 'finished';
       if (mounted) {
         setState(() {
           _session = refreshed;
           _online = true;
         });
+        if (justFinished) _onFinished();
       }
     } catch (_) {
       if (mounted) setState(() => _online = false);
@@ -149,6 +158,7 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
             _session = _session.copyWith(
               status: result.runnerStatus,
               startedAt: _session.startedAt ?? DateTime.now(),
+              finishedAt: result.runnerStatus == 'finished' ? (_session.finishedAt ?? DateTime.now()) : null,
               validatedCheckpointIds: {..._session.validatedCheckpointIds, result.checkpointId!}.toList(),
             );
           }
@@ -167,7 +177,28 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
 
     if (_session.status == 'racing') {
       context.read<LocationService>().startTracking();
+    } else if (_session.status == 'finished') {
+      _onFinished();
     }
+  }
+
+  void _onFinished() {
+    if (_summaryOpened) return;
+    _summaryOpened = true;
+    _openSummary();
+  }
+
+  Future<void> _openSummary() async {
+    // The race is over: no more fixes. The ones still queued are sent before the recap is asked
+    // for, so the distance it shows already counts them.
+    context.read<LocationService>().stopTracking();
+    await _queueProcessor.flush();
+    if (!mounted) return;
+
+    final outcome = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => RaceSummaryScreen(token: _session.token)),
+    );
+    if (outcome == raceSummaryQuit) await _quit();
   }
 
   Future<void> _sos() async {
@@ -254,8 +285,15 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
                     _scanButton(),
                     const SizedBox(height: 10),
                     _actionRow(),
-                  ] else
+                  ] else ...[
+                    ElevatedButton(
+                      onPressed: _openSummary,
+                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                      child: Text('Voir mon récapitulatif', style: EcoFont.sans(size: 15, weight: FontWeight.w600, color: Colors.white)),
+                    ),
+                    const SizedBox(height: 10),
                     OutlinedButton(onPressed: _quit, child: const Text('Terminer')),
+                  ],
                 ],
               ),
             ),

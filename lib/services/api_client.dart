@@ -99,6 +99,10 @@ class ApiClient {
   Future<Map<String, dynamic>> runnerState(String token) =>
       _get('/api/eco/runner/state?token=$token');
 
+  /// The recap of a runner who has scanned the finish (409 `runnerNotFinished` before that).
+  Future<Map<String, dynamic>> runnerSummary(String token) =>
+      _get('/api/eco/runner/summary?token=$token');
+
   Future<Map<String, dynamic>> runnerScan(String token, String code, double? latitude, double? longitude, {String method = 'qr_scan'}) =>
       _post('/api/eco/runner/scan', {
         'token': token,
