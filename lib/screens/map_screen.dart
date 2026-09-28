@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../models/checkpoint.dart';
 import '../models/runner_session.dart';
 import '../theme.dart';
+import '../widgets/eco_ign_map.dart';
 import '../widgets/eco_widgets.dart';
 
 // Handoff screen 3f - the checkpoint map. The runner's own position is deliberately never plotted
@@ -51,20 +52,16 @@ class MapScreen extends StatelessWidget {
                       ),
                     ),
                   )
-                : FlutterMap(
+                : EcoIgnMap(
                     options: MapOptions(
+                      maxZoom: 19,
                       initialCameraFit: CameraFit.coordinates(
                         coordinates: visible.map((c) => LatLng(c.latitude!, c.longitude!)).toList(),
                         padding: const EdgeInsets.all(48),
                       ),
                     ),
                     children: [
-                      TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.beaupeyrat.eco',
-                      ),
                       MarkerLayer(markers: visible.map((c) => _markerFor(c, validated)).toList()),
-                      const EcoMapAttribution(),
                     ],
                   ),
           ),

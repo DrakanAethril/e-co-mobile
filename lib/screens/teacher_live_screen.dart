@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/eco_ign_map.dart';
 import '../widgets/eco_widgets.dart';
 
 // Handoff screen 4d - the mobile counterpart of the web live view (course_live.html.twig): the
@@ -134,22 +135,15 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
   Widget _map() {
     final points = _checkpoints.map((c) => LatLng((c['latitude'] as num).toDouble(), (c['longitude'] as num).toDouble())).toList();
 
-    return Stack(
+    return EcoIgnMap(
+      attributionTrailing: '10 s',
+      options: MapOptions(
+        maxZoom: 19,
+        initialCameraFit: CameraFit.coordinates(coordinates: points, padding: const EdgeInsets.all(40)),
+      ),
       children: [
-        FlutterMap(
-          options: MapOptions(
-            initialCameraFit: CameraFit.coordinates(coordinates: points, padding: const EdgeInsets.all(40)),
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.beaupeyrat.eco',
-            ),
-            MarkerLayer(markers: _checkpoints.map(_checkpointMarker).toList()),
-            MarkerLayer(markers: _runners.where(_isOnMap).map(_runnerMarker).toList()),
-          ],
-        ),
-        const EcoMapAttribution(trailing: '10 s'),
+        MarkerLayer(markers: _checkpoints.map(_checkpointMarker).toList()),
+        MarkerLayer(markers: _runners.where(_isOnMap).map(_runnerMarker).toList()),
       ],
     );
   }

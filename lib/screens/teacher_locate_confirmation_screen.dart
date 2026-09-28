@@ -19,6 +19,15 @@ class TeacherLocateConfirmationScreen extends StatelessWidget {
   /// balise suivante (5)" instead of a dead end.
   final String? nextCheckpointLabel;
 
+  /// The IGN's reading of the ground under the flag (LiDAR HD / RGE ALTI), read by the server as it
+  /// saved the position. All three are null when the IGN did not answer in time: the position is
+  /// saved all the same and the web screen's terrain analysis reads it later.
+  final double? groundAltitude;
+  final double? canopyHeight;
+
+  /// A wider radius than the flag has, when the canopy calls for one - set on the web screen.
+  final int? advisedToleranceMeters;
+
   const TeacherLocateConfirmationScreen({
     super.key,
     required this.parcoursName,
@@ -30,6 +39,9 @@ class TeacherLocateConfirmationScreen extends StatelessWidget {
     required this.locatedCount,
     required this.totalCount,
     this.nextCheckpointLabel,
+    this.groundAltitude,
+    this.canopyHeight,
+    this.advisedToleranceMeters,
   });
 
   @override
@@ -73,6 +85,10 @@ class TeacherLocateConfirmationScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 18),
                     _detailsCard(),
+                    if (advisedToleranceMeters != null) ...[
+                      const SizedBox(height: 12),
+                      _toleranceAdvice(advisedToleranceMeters!),
+                    ],
                     const SizedBox(height: 18),
                     _offlineNote(),
                   ],
@@ -163,6 +179,22 @@ class TeacherLocateConfirmationScreen extends StatelessWidget {
               style: EcoFont.sans(size: 13, weight: FontWeight.w600, color: const Color(0xFFCFDDE9)),
             ),
           ),
+          if (groundAltitude != null)
+            _row(
+              'Altitude (IGN)',
+              Text(
+                '${groundAltitude!.round()} m',
+                style: EcoFont.sans(size: 13, weight: FontWeight.w600, color: const Color(0xFFCFDDE9)),
+              ),
+            ),
+          if (canopyHeight != null)
+            _row(
+              'Végétation autour',
+              Text(
+                canopyHeight! < 1 ? 'dégagé' : '${canopyHeight!.round()} m de haut',
+                style: EcoFont.sans(size: 13, weight: FontWeight.w600, color: const Color(0xFFCFDDE9)),
+              ),
+            ),
           _row(
             'Progression',
             Text(
@@ -184,6 +216,24 @@ class TeacherLocateConfirmationScreen extends StatelessWidget {
           Text(label, style: EcoFont.sans(size: 13, color: EcoColors.onNavyMuted)),
           value,
         ],
+      ),
+    );
+  }
+
+  /// Under a tall canopy a phone's fix wanders further: runners standing at the flag would be
+  /// refused at the current radius. The mobile app does not edit tolerances, the web screen does.
+  Widget _toleranceAdvice(int meters) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      decoration: BoxDecoration(
+        color: EcoColors.gold.withOpacity(0.14),
+        border: Border.all(color: EcoColors.gold.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        'Balise sous couvert végétal : une tolérance de $meters m est conseillée (réglable sur l’écran web du parcours).',
+        style: EcoFont.sans(size: 12, color: EcoColors.goldStrong, height: 1.4),
       ),
     );
   }
