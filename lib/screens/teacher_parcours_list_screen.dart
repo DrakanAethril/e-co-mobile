@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/teacher_logout_button.dart';
 import 'teacher_locate_screen.dart';
 
 // « À localiser », the first tab of TeacherHomeScreen - parcours still needing checkpoints located
@@ -33,7 +34,7 @@ class _TeacherParcoursListScreenState extends State<TeacherParcoursListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Balises à localiser')),
+      appBar: AppBar(title: const Text('Balises à localiser'), actions: const [TeacherLogoutButton()]),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {

@@ -3,15 +3,19 @@ import 'package:provider/provider.dart';
 
 import '../models/runner_session.dart';
 import '../services/api_client.dart';
+import '../services/jwt_expiry.dart';
 import '../services/session_store.dart';
 import '../theme.dart';
 import 'join_screen.dart';
 import 'race_screen.dart';
+import 'teacher_home_screen.dart';
+import 'teacher_login_screen.dart';
 
 // "Reprise après crash" entry point - if a runner token is persisted locally, resume straight
 // into the race from server state (GET /api/eco/runner/state) instead of ever showing the join
 // screen again. An invalid/expired token (course was deleted, etc.) just falls through to the
-// normal home choice.
+// normal home choice. Then « Rester connecté »: a teacher JWT stored at login reopens the teacher
+// menu, as long as it has not run out - an expired one lands on the login screen, saying so.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -43,6 +47,21 @@ class _SplashScreenState extends State<SplashScreen> {
       } catch (_) {
         await sessionStore.clearRunnerSession();
       }
+    }
+
+    final teacherJwt = await sessionStore.loadTeacherJwt();
+    if (teacherJwt != null) {
+      final usable = isJwtUsable(teacherJwt);
+      if (!usable) await sessionStore.clearTeacherJwt();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => usable
+              ? TeacherHomeScreen(jwt: teacherJwt)
+              : const TeacherLoginScreen(notice: 'Votre session a expiré : reconnectez-vous.'),
+        ),
+      );
+      return;
     }
 
     if (!mounted) return;

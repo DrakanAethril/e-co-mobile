@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/teacher_logout_button.dart';
 import 'teacher_courses_screen.dart';
 
 // « Parcours prêts », the second tab of TeacherHomeScreen - the parcours whose every flag is
@@ -41,7 +42,7 @@ class _TeacherReadyParcoursScreenState extends State<TeacherReadyParcoursScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Parcours prêts')),
+      appBar: AppBar(title: const Text('Parcours prêts'), actions: const [TeacherLogoutButton()]),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {
