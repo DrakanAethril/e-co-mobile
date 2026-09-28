@@ -83,6 +83,8 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
 
     try {
       final json = await api.teacherLocateCheckpoint(widget.jwt, checkpoint['id'] as int, position.latitude, position.longitude);
+      // What the server read from the IGN for this spot - absent when the IGN was too slow to answer.
+      final located = json['checkpoint'] is Map ? (json['checkpoint'] as Map).cast<String, dynamic>() : const <String, dynamic>{};
       if (!mounted) return;
       await _load();
       if (!mounted) return;
@@ -100,6 +102,9 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
             locatedCount: (json['locatedCount'] as num).toInt(),
             totalCount: (json['totalCount'] as num).toInt(),
             nextCheckpointLabel: next != null ? _shortLabel(next) : null,
+            groundAltitude: (located['groundAltitude'] as num?)?.toDouble(),
+            canopyHeight: (located['canopyHeight'] as num?)?.toDouble(),
+            advisedToleranceMeters: (located['advisedToleranceMeters'] as num?)?.toInt(),
           ),
         ),
       );
@@ -183,9 +188,13 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
 
     // The mockup spells out what makes a checkpoint special right next to its name: a landmark
     // note, and a tolerance that was widened away from the parcours default.
+    // The IGN's advice rides along once it has read the ground under the flag: a canopy calling
+    // for a wider radius than the flag has.
+    final advised = (checkpoint['advisedToleranceMeters'] as num?)?.toInt();
     final qualifiers = <String>[
       if (note != null && note.isNotEmpty) note,
       if (tolerance != null && tolerance != 20) 'tol. $tolerance m',
+      if (advised != null) 'tol. conseillée $advised m',
     ];
 
     return EcoCard(
