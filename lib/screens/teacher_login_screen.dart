@@ -6,7 +6,7 @@ import '../services/session_store.dart';
 import '../theme.dart';
 import '../widgets/eco_widgets.dart';
 import 'join_screen.dart';
-import 'teacher_parcours_list_screen.dart';
+import 'teacher_home_screen.dart';
 
 // Handoff screen 4a - the same shell as 3d, identifiant/mot de passe (moncampus LDAP account)
 // instead of pseudo/code. Reuses the exact same JWT login moncampus-mobile already has
@@ -59,7 +59,7 @@ class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
       }
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => TeacherParcoursListScreen(jwt: jwt)),
+        MaterialPageRoute(builder: (_) => TeacherHomeScreen(jwt: jwt)),
       );
     } catch (_) {
       setState(() => _error = 'Identifiant ou mot de passe incorrect.');

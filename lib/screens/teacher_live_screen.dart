@@ -8,6 +8,7 @@ import '../services/api_client.dart';
 import '../theme.dart';
 import '../widgets/eco_ign_map.dart';
 import '../widgets/eco_widgets.dart';
+import 'teacher_course_actions.dart';
 
 // Handoff screen 4d - the mobile counterpart of the web live view (course_live.html.twig): the
 // same App\Service\EcoLiveTrackingService-shaped rows, the same 10 s beat, and the same map above
@@ -26,6 +27,7 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
   List<Map<String, dynamic>> _runners = [];
   List<Map<String, dynamic>> _checkpoints = [];
   String? _courseCode;
+  String? _status;
   int? _elapsedMinutes;
   Timer? _timer;
 
@@ -51,6 +53,7 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
         _runners = (json['runners'] as List).cast<Map<String, dynamic>>();
         _checkpoints = (json['checkpoints'] as List? ?? []).cast<Map<String, dynamic>>();
         _courseCode = json['courseCode'] as String?;
+        _status = json['status'] as String?;
         _elapsedMinutes = (json['elapsedMinutes'] as num?)?.toInt();
       });
     } catch (_) {
@@ -88,15 +91,46 @@ class _TeacherLiveScreenState extends State<TeacherLiveScreen> {
                     itemBuilder: (context, index) => _runnerTile(_runners[index]),
                   ),
           ),
+          if (_status == 'in_progress') _stopBar(),
         ],
       ),
     );
   }
 
+  Widget _stopBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: EcoColors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _stop,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: EcoColors.red,
+              side: const BorderSide(color: EcoColors.redBorder),
+            ),
+            icon: const Icon(Icons.stop, size: 18),
+            label: Text('Arrêter la course', style: EcoFont.sans(size: 14, weight: FontWeight.w600, color: EcoColors.red)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _stop() async {
+    final closed = await confirmAndCloseCourse(context, widget.jwt, widget.courseId, widget.courseName);
+    if (closed && mounted) Navigator.of(context).pop();
+  }
+
   String _subtitle() {
     final parts = <String>[
       if (_courseCode != null) _courseCode!,
-      'en cours',
+      _status == 'closed' ? 'clôturée' : 'en cours',
       if (_elapsedMinutes != null) '$_elapsedMinutes min',
     ];
 

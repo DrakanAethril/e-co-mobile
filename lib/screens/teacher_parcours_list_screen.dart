@@ -4,10 +4,9 @@ import 'package:provider/provider.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
 import 'teacher_locate_screen.dart';
-import 'teacher_live_list_screen.dart';
 
-// Entry point after teacher login - parcours still needing checkpoints located (screen 4b's
-// list), plus a way into the live safety view (4d).
+// « À localiser », the first tab of TeacherHomeScreen - parcours still needing checkpoints located
+// (screen 4b's list). Once every flag is located a parcours moves to « Parcours prêts ».
 class TeacherParcoursListScreen extends StatefulWidget {
   final String jwt;
   const TeacherParcoursListScreen({super.key, required this.jwt});
@@ -34,25 +33,14 @@ class _TeacherParcoursListScreenState extends State<TeacherParcoursListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('e-CO — Enseignant'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.podcasts),
-            tooltip: 'Suivi sécurité',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => TeacherLiveListScreen(jwt: widget.jwt)),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Balises à localiser')),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           final parcoursList = snapshot.data!;
           if (parcoursList.isEmpty) {
-            return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Tous vos parcours sont localisés.', textAlign: TextAlign.center)));
+            return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Tous vos parcours sont localisés.\nLancez une course depuis « Parcours prêts ».', textAlign: TextAlign.center)));
           }
           return ListView.separated(
             padding: const EdgeInsets.all(16),
