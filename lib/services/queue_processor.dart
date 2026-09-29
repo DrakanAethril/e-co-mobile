@@ -71,6 +71,9 @@ class QueueProcessor {
               (item.payload['latitude'] as num?)?.toDouble(),
               (item.payload['longitude'] as num?)?.toDouble(),
               method: item.payload['method'] as String? ?? 'qr_scan',
+              // Absent from a scan queued by an app older than 1.3.3: the server then dates it
+              // on arrival, as it always did.
+              scannedAt: item.payload['scannedAt'] as String?,
             );
           case 'sos':
             await _api.runnerSos(_tokenProvider());

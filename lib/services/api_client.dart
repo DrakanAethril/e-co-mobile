@@ -103,13 +103,17 @@ class ApiClient {
   Future<Map<String, dynamic>> runnerSummary(String token) =>
       _get('/api/eco/runner/summary?token=$token');
 
-  Future<Map<String, dynamic>> runnerScan(String token, String code, double? latitude, double? longitude, {String method = 'qr_scan'}) =>
+  /// [scannedAt] is when the runner scanned, in UTC: a scan queued without network is sent long
+  /// after, and the server would otherwise date the start or the finish on its arrival.
+  Future<Map<String, dynamic>> runnerScan(String token, String code, double? latitude, double? longitude,
+          {String method = 'qr_scan', String? scannedAt}) =>
       _post('/api/eco/runner/scan', {
         'token': token,
         'code': code,
         'method': method,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
+        if (scannedAt != null) 'scannedAt': scannedAt,
       });
 
   Future<void> runnerPositions(String token, List<Map<String, dynamic>> points) async {
