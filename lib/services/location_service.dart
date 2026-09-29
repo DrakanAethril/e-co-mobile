@@ -44,6 +44,10 @@ class LocationService {
         // accepte l'absence du champ, autant ne rien envoyer plutôt qu'un zéro qui ferait croire
         // à un parcours au niveau de la mer.
         if (position.altitude != 0) 'altitude': position.altitude,
+        // The radius, in metres, the phone itself gives this fix: under trees it now and then
+        // hands out a position tens of metres off, and the server leaves out those it calls vague
+        // rather than sum them into the distance. 0 means the platform did not say.
+        if (position.accuracy > 0) 'accuracy': position.accuracy,
         'recordedAt': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (_) {
