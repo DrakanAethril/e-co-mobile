@@ -56,6 +56,11 @@ class EcoIgnMap extends StatefulWidget {
 
 class _EcoIgnMapState extends State<EcoIgnMap> {
   static const _baseKey = 'eco_map_base';
+
+  /// A tile that does not load is a blank square on the map, and that square is the whole signal:
+  /// out of coverage in a wood, the phone would otherwise report every missing tile as an error
+  /// nobody reads.
+  static final _tiles = NetworkTileProvider(silenceExceptions: true);
   static const _overlaysKey = 'eco_map_overlays';
 
   EcoMapBase _base = EcoMapBase.plan;
@@ -102,6 +107,7 @@ class _EcoIgnMapState extends State<EcoIgnMap> {
               urlTemplate: '$_ignWmts&LAYER=${_base.layer}&FORMAT=${_base.format}',
               userAgentPackageName: 'com.beaupeyrat.eco',
               maxNativeZoom: 19,
+              tileProvider: _tiles,
             ),
             for (final overlay in EcoMapOverlay.values.where(_overlays.contains))
               Opacity(
@@ -110,6 +116,7 @@ class _EcoIgnMapState extends State<EcoIgnMap> {
                   urlTemplate: '$_ignWmts&LAYER=${overlay.layer}&FORMAT=image/png',
                   userAgentPackageName: 'com.beaupeyrat.eco',
                   maxNativeZoom: 18,
+                  tileProvider: _tiles,
                   // The overlays are transparent PNGs laid on a base map already on screen: no
                   // point fading them in over a blank.
                   tileDisplay: const TileDisplay.instantaneous(),

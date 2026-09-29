@@ -3,8 +3,10 @@ import 'package:eco/screens/teacher_parcours_terrain_screen.dart';
 import 'package:eco/services/api_client.dart';
 import 'package:eco/theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// A parcours' two pages in the teacher app, against an in-memory server: the radius of each flag
 /// edited and saved, and the IGN's reading of the ground, asked for then read once written.
@@ -58,6 +60,11 @@ class _FakeApi extends ApiClient {
         'canAnalyze': !pending,
         'analyzedAt': analysed ? '2026-09-28T10:05:00+02:00' : null,
         'current': analysed,
+        'flags': [
+          {'id': 1, 'label': 'D', 'type': 'start', 'name': 'Départ', 'latitude': 45.830, 'longitude': 1.260},
+          {'id': 2, 'label': '1', 'type': 'checkpoint', 'name': 'Balise 1', 'latitude': 45.832, 'longitude': 1.263},
+          {'id': 3, 'label': 'A', 'type': 'finish', 'name': 'Arrivée', 'latitude': 45.831, 'longitude': 1.259},
+        ],
         'analysis': analysed
             ? {
                 'commune': 'Limoges',
@@ -98,6 +105,8 @@ Future<void> _open(WidgetTester tester, _FakeApi api, Widget screen) async {
 
 void main() {
   setUpAll(disableEcoFontFetching);
+  // The map remembers its layers on the phone.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('the radius of each flag is edited, the advice filled in one tap, then saved', (tester) async {
     final api = _FakeApi();
@@ -125,6 +134,9 @@ void main() {
     );
 
     expect(find.textContaining('Pas encore analysé'), findsOneWidget);
+    // The flags are on the map before any analysis: where they stand needs no IGN answer.
+    expect(find.text('CARTE DU PARCOURS'), findsOneWidget);
+    expect(find.byType(FlutterMap), findsOneWidget);
     await tester.tap(find.text('Analyser le terrain'));
     await tester.pump();
     expect(find.textContaining('Analyse en cours'), findsOneWidget);
@@ -133,12 +145,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Analysé le 28/09/2026'), findsOneWidget);
+    expect(find.text("Relancer l'analyse"), findsOneWidget);
     expect(find.textContaining('Limoges · près de « Le Mas Éloi »', findRichText: true), findsOneWidget);
     expect(find.textContaining('forêt publique'), findsOneWidget);
+    // The map comes before the legs, its three flags labelled as the legs name them.
+    expect(find.descendant(of: find.byType(MarkerLayer), matching: find.text('D')), findsOneWidget);
+    expect(find.descendant(of: find.byType(MarkerLayer), matching: find.text('A')), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('TRONÇONS'), 200);
+    expect(tester.getBottomLeft(find.byType(FlutterMap)).dy, lessThan(tester.getTopLeft(find.text('TRONÇONS')).dy));
     expect(find.text('260 m (×2,3)'), findsOneWidget);
     expect(find.text('32 %'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('620 m'), 200);
     expect(find.text('620 m'), findsOneWidget);
-    expect(find.text("Relancer l'analyse"), findsOneWidget);
   });
 }
