@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/eco_ign_map.dart';
 import '../widgets/eco_widgets.dart';
 
-// The web's « Lecture du terrain (IGN) » card on the phone: where the parcours is, the legs as the
-// ground makes them (straight line, by the paths, climb, steepest stretch, wood, effort) and the
+// The web's « Lecture du terrain (IGN) » card on the phone: where the parcours is, the map of its
+// located flags on the IGN's base map, the legs as the ground makes them (straight line, by the paths, climb, steepest stretch, wood, effort) and the
 // safety sheet of every located flag. The reading is written by app:eco:read-terrain on the server,
 // never here: « Analyser le terrain » only asks, and the screen polls until the answer is written.
 class TeacherParcoursTerrainScreen extends StatefulWidget {
@@ -111,6 +114,8 @@ class _TeacherParcoursTerrainScreenState extends State<TeacherParcoursTerrainScr
     }
 
     final analysis = sheet['analysis'] is Map ? (sheet['analysis'] as Map).cast<String, dynamic>() : null;
+    // Where the flags stand now, analysed or not: the map needs nothing the IGN has to answer.
+    final flags = (sheet['flags'] as List? ?? []).cast<Map<String, dynamic>>();
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -119,7 +124,7 @@ class _TeacherParcoursTerrainScreenState extends State<TeacherParcoursTerrainScr
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           _statusCard(sheet, analysis != null),
-          if (analysis != null) ..._analysis(analysis),
+          if (analysis != null) ..._analysis(analysis, flags) else ..._map(flags),
           const SizedBox(height: 12),
           Text(
             "Données IGN – Géoplateforme (BD TOPO, RGE ALTI, LiDAR HD), Licence Ouverte Etalab 2.0. "
@@ -186,7 +191,7 @@ class _TeacherParcoursTerrainScreenState extends State<TeacherParcoursTerrainScr
     );
   }
 
-  List<Widget> _analysis(Map<String, dynamic> analysis) {
+  List<Widget> _analysis(Map<String, dynamic> analysis, List<Map<String, dynamic>> flags) {
     final commune = analysis['commune'] as String?;
     final nearby = analysis['nearbyPlace'] as String?;
     final forests = (analysis['publicForests'] as List? ?? []).cast<String>();
@@ -219,6 +224,7 @@ class _TeacherParcoursTerrainScreenState extends State<TeacherParcoursTerrainScr
         const SizedBox(height: 10),
         _note('ℹ', "Analyse incomplète : l'IGN n'a pas répondu pour une partie des tronçons. Relancez-la plus tard."),
       ],
+      ..._map(flags),
       if (legs.isNotEmpty) ...[
         _sectionTitle('TRONÇONS'),
         for (final leg in legs) ...[_legCard(leg), const SizedBox(height: 8)],
@@ -235,6 +241,68 @@ class _TeacherParcoursTerrainScreenState extends State<TeacherParcoursTerrainScr
         ),
       ],
     ];
+  }
+
+  /// The parcours on the Plan IGN (or whichever layer the phone last chose), framed on its flags.
+  /// Rotation is off: a map turned by a stray two-finger gesture no longer reads north-up.
+  List<Widget> _map(List<Map<String, dynamic>> flags) {
+    if (flags.isEmpty) return const [];
+
+    final points = flags.map(_pointOf).toList();
+
+    return [
+      _sectionTitle('CARTE DU PARCOURS'),
+      Container(
+        height: 280,
+        decoration: BoxDecoration(
+          border: Border.all(color: EcoColors.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: EcoIgnMap(
+          options: MapOptions(
+            maxZoom: 19,
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+            // A lone flag would otherwise be framed at the deepest zoom, with nothing around it.
+            initialCameraFit: CameraFit.coordinates(coordinates: points, padding: const EdgeInsets.all(40), maxZoom: 17),
+          ),
+          children: [
+            MarkerLayer(markers: [for (final flag in flags) _flagMarker(flag)]),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  static LatLng _pointOf(Map<String, dynamic> flag) =>
+      LatLng((flag['latitude'] as num).toDouble(), (flag['longitude'] as num).toDouble());
+
+  /// Start and finish filled, the flags in between outlined - the live map's markers, so a
+  /// teacher reads the two maps the same way.
+  Marker _flagMarker(Map<String, dynamic> flag) {
+    final isAnchor = flag['type'] != 'checkpoint';
+
+    return Marker(
+      point: _pointOf(flag),
+      width: 30,
+      height: 30,
+      child: Center(
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: isAnchor ? EcoColors.blueDark : Colors.white,
+            shape: BoxShape.circle,
+            border: isAnchor ? null : Border.all(color: EcoColors.faint, width: 2),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '${flag['label']}',
+            style: EcoFont.sans(size: 10, weight: FontWeight.w700, color: isAnchor ? Colors.white : EcoColors.muted),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _legCard(Map<String, dynamic> leg) {
