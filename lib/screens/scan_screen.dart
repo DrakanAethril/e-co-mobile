@@ -78,6 +78,8 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Future<void> _submit(String code, {required String method}) async {
+    // Taken before waiting on the GPS: the scan happened when the code was read.
+    final scannedAt = DateTime.now().toUtc().toIso8601String();
     final api = context.read<ApiClient>();
     final locationService = context.read<LocationService>();
     final queue = context.read<OfflineQueueDb>();
@@ -96,7 +98,8 @@ class _ScanScreenState extends State<ScanScreen> {
     }
 
     try {
-      final json = await api.runnerScan(widget.token, code, position.latitude, position.longitude, method: method);
+      final json = await api.runnerScan(widget.token, code, position.latitude, position.longitude,
+          method: method, scannedAt: scannedAt);
       if (!mounted) return;
       Navigator.of(context).pop(ScanResult(
         queued: false,
@@ -115,6 +118,7 @@ class _ScanScreenState extends State<ScanScreen> {
         'method': method,
         'latitude': position.latitude,
         'longitude': position.longitude,
+        'scannedAt': scannedAt,
       });
       if (!mounted) return;
       Navigator.of(context).pop(ScanResult(queued: true));
