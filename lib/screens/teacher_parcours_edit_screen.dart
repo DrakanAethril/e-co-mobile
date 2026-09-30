@@ -22,7 +22,7 @@ class TeacherParcoursEditScreen extends StatefulWidget {
 class _TeacherParcoursEditScreenState extends State<TeacherParcoursEditScreen> {
   List<Map<String, dynamic>> _checkpoints = [];
   final Map<int, TextEditingController> _fields = {};
-  int _defaultTolerance = 20;
+  int _defaultTolerance = 60;
   bool _loading = true;
   bool _failed = false;
   bool _saving = false;
@@ -67,7 +67,7 @@ class _TeacherParcoursEditScreenState extends State<TeacherParcoursEditScreen> {
     }
     setState(() {
       _checkpoints = checkpoints;
-      _defaultTolerance = (json['defaultToleranceMeters'] as num?)?.toInt() ?? 20;
+      _defaultTolerance = (json['defaultToleranceMeters'] as num?)?.toInt() ?? 60;
       _loading = false;
       _failed = false;
     });

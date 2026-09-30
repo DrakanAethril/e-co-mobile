@@ -48,6 +48,21 @@ class _FakeApi extends ApiClient {
           'modes': [
             {'value': 'imposed_order', 'label': 'Ordre imposé', 'description': 'balises dans l’ordre', 'timeLimited': false},
             {'value': 'score', 'label': 'Course au score', 'description': 'points par balise', 'timeLimited': true},
+            {
+              'value': 'specific_checkpoints',
+              'label': 'Balises spécifiques',
+              'description': 'seulement les balises choisies',
+              'timeLimited': true,
+              'checkpointSelection': true,
+            },
+          ],
+          'checkpoints': [
+            {'id': 11, 'name': 'Balise 1', 'note': null, 'position': 1},
+            {'id': 12, 'name': 'Balise 2', 'note': 'passerelle', 'position': 2},
+          ],
+          'specificOrders': [
+            {'value': true, 'label': 'Dans l’ordre'},
+            {'value': false, 'label': 'Dans l’ordre de son choix'},
           ],
           'mapVisibilities': [
             {'value': 'all_checkpoints', 'label': 'Toutes les balises'},
@@ -141,5 +156,46 @@ void main() {
 
     expect(api.courses.single['status'], 'closed');
     expect(find.textContaining('Aucune course en cours'), findsOneWidget);
+  });
+
+  testWidgets('a « Balises spécifiques » course names its flags and is timed only out of order', (tester) async {
+    // Tall enough for the whole form: a ListView does not build what lies below the screen, and
+    // « nothing found » would then prove nothing.
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final api = _FakeApi();
+    await tester.pumpWidget(
+      Provider<ApiClient>.value(
+        value: api,
+        child: MaterialApp(theme: ecoTheme(), home: const TeacherHomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Parcours prêts'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bois de la Bastide'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nouvelle course'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Balises à trouver'), findsNothing);
+    await tester.tap(find.text('Balises spécifiques'));
+    await tester.pump();
+    // In order by default: ranked on time, no allowance.
+    expect(find.text('Balise 2 (passerelle)'), findsOneWidget);
+    expect(find.text('Temps imparti (minutes)'), findsNothing);
+    await tester.tap(find.text('Dans l’ordre de son choix'));
+    await tester.pump();
+    expect(find.text('Temps imparti (minutes)'), findsOneWidget);
+
+    await tester.tap(find.text('Balise 2 (passerelle)'));
+    await tester.enterText(find.byType(TextField).first, 'Balises');
+    await tester.tap(find.text('Créer la course'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastCreated?['mode'], 'specific_checkpoints');
+    expect(api.lastCreated?['specificCheckpointIds'], [12]);
+    expect(api.lastCreated?['specificOrdered'], isFalse);
   });
 }

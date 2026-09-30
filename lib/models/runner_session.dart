@@ -10,7 +10,13 @@ class RunnerSession {
   final String status; // 'not_started' | 'racing' | 'finished'
   final String courseName;
   final String parcoursName;
-  final String mode; // 'imposed_order' | 'free_order' | 'score'
+  // 'imposed_order' | 'free_order' | 'score'. A « Balises spécifiques » course arrives as one of the
+  // first two - in order or not - with its list of checkpoints already cut down by the server.
+  final String mode;
+
+  /// The server's wording of the mode (« balises spécifiques · dans l’ordre »); null from a server
+  /// older than the field, in which case [modeLabel] words [mode] itself.
+  final String? serverModeLabel;
   final String mapVisibility;
 
   /// Time allowance of the modes played against the clock (screen 2b). Null in imposed order.
@@ -28,6 +34,7 @@ class RunnerSession {
     required this.courseName,
     required this.parcoursName,
     required this.mode,
+    this.serverModeLabel,
     required this.mapVisibility,
     required this.timeLimitMinutes,
     required this.startedAt,
@@ -37,7 +44,7 @@ class RunnerSession {
   });
 
   /// The mode's wording, as it reads under the parcours name in the header.
-  String get modeLabel => switch (mode) {
+  String get modeLabel => serverModeLabel ?? switch (mode) {
         'free_order' => 'ordre libre',
         'score' => 'course au score',
         _ => 'ordre imposé',
@@ -51,6 +58,7 @@ class RunnerSession {
         courseName: json['courseName'] as String,
         parcoursName: json['parcoursName'] as String? ?? '',
         mode: json['mode'] as String,
+        serverModeLabel: json['modeLabel'] as String?,
         mapVisibility: json['mapVisibility'] as String,
         timeLimitMinutes: (json['timeLimitMinutes'] as num?)?.toInt(),
         startedAt: json['startedAt'] != null ? DateTime.parse(json['startedAt'] as String) : null,
@@ -69,6 +77,7 @@ class RunnerSession {
         courseName: courseName,
         parcoursName: parcoursName,
         mode: mode,
+        serverModeLabel: serverModeLabel,
         mapVisibility: mapVisibility,
         timeLimitMinutes: timeLimitMinutes,
         startedAt: startedAt ?? this.startedAt,
