@@ -37,7 +37,7 @@ class Checkpoint {
         name: json['name'] as String,
         position: json['position'] as int,
         type: json['type'] as String,
-        toleranceMeters: (json['toleranceMeters'] as num?)?.toInt() ?? 20,
+        toleranceMeters: (json['toleranceMeters'] as num?)?.toInt() ?? 60,
         isValidated: json['isValidated'] as bool? ?? false,
         isNext: json['isNext'] as bool? ?? false,
         latitude: (json['latitude'] as num?)?.toDouble(),

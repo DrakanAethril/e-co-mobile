@@ -173,7 +173,7 @@ class _JoinScreenState extends State<JoinScreen> {
   Widget _coursePreview(Map<String, dynamic> preview) {
     final joinable = preview['joinable'] == true;
     final color = joinable ? EcoColors.greenTx : EcoColors.goldTx;
-    final mode = switch (preview['mode'] as String?) {
+    final mode = preview['modeLabel'] as String? ?? switch (preview['mode'] as String?) {
       'free_order' => 'ordre libre',
       'score' => 'course au score',
       _ => 'ordre imposé',

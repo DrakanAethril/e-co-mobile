@@ -28,6 +28,11 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
   final _timeLimitController = TextEditingController();
   late final List<Map<String, dynamic>> _modes;
   late final List<Map<String, dynamic>> _mapVisibilities;
+  // « Balises spécifiques »: the numbered flags to pick from (Départ and Arrivée are part of every
+  // race), the ones picked, and whether they are run in order.
+  late final List<Map<String, dynamic>> _checkpoints;
+  final Set<int> _selectedCheckpointIds = {};
+  bool _specificOrdered = true;
   late String _mode;
   late String _mapVisibility;
   bool _teamsEnabled = false;
@@ -41,6 +46,7 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
     super.initState();
     _modes = (widget.options['modes'] as List? ?? const []).cast<Map<String, dynamic>>();
     _mapVisibilities = (widget.options['mapVisibilities'] as List? ?? const []).cast<Map<String, dynamic>>();
+    _checkpoints = (widget.options['checkpoints'] as List? ?? const []).cast<Map<String, dynamic>>();
     // The server lists the entity's defaults first (imposed order, every checkpoint shown).
     _mode = _modes.isNotEmpty ? _modes.first['value'] as String : 'imposed_order';
     _mapVisibility = _mapVisibilities.isNotEmpty ? _mapVisibilities.first['value'] as String : 'all_checkpoints';
@@ -53,13 +59,19 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
     super.dispose();
   }
 
-  bool get _timeLimited {
+  Map<String, dynamic>? get _selectedMode {
     for (final mode in _modes) {
-      if (mode['value'] == _mode) return mode['timeLimited'] == true;
+      if (mode['value'] == _mode) return mode;
     }
 
-    return false;
+    return null;
   }
+
+  bool get _checkpointSelection => _selectedMode?['checkpointSelection'] == true;
+
+  // A race run in order is ranked on time: in « Balises spécifiques » that depends on the order
+  // chosen, the server's own rule (EcoCourse::isTimeLimited()).
+  bool get _timeLimited => _checkpointSelection ? !_specificOrdered : _selectedMode?['timeLimited'] == true;
 
   Future<void> _submit() async {
     final name = _nameController.text.trim();
@@ -80,6 +92,10 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
       final json = await api.teacherCreateCourse(widget.parcoursId, {
         'name': name,
         'mode': _mode,
+        if (_checkpointSelection) ...{
+          'specificCheckpointIds': _selectedCheckpointIds.toList(),
+          'specificOrdered': _specificOrdered,
+        },
         if (_timeLimited && timeLimit != null) 'timeLimitMinutes': timeLimit,
         'mapVisibility': _mapVisibility,
         'teamsEnabled': _teamsEnabled,
@@ -122,6 +138,7 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
                 const EcoFieldLabel('Mode de course'),
                 for (final mode in _modes) _modeCard(mode),
                 if (_fieldErrors['mode'] != null) _fieldError(_fieldErrors['mode']!),
+                if (_checkpointSelection) _specificCheckpoints(),
                 if (_timeLimited) ...[
                   const SizedBox(height: 12),
                   const EcoFieldLabel('Temps imparti (minutes)'),
@@ -218,6 +235,59 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
     );
   }
 
+  /// « Balises spécifiques »: in order or not, then the flags - the others do not exist for the race.
+  Widget _specificCheckpoints() {
+    final orders = (widget.options['specificOrders'] as List? ?? const []).cast<Map<String, dynamic>>();
+
+    return EcoCard(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      background: EcoColors.blueBgSoft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const EcoFieldLabel('Ordre de passage'),
+          for (final order in orders)
+            RadioListTile<bool>(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: order['value'] == true,
+              groupValue: _specificOrdered,
+              activeColor: EcoColors.blue,
+              onChanged: (value) => setState(() => _specificOrdered = value ?? _specificOrdered),
+              title: Text(order['label'] as String, style: EcoFont.sans(size: 13.5)),
+            ),
+          const SizedBox(height: 6),
+          const EcoFieldLabel('Balises à trouver'),
+          for (final checkpoint in _checkpoints) _checkpointTile(checkpoint),
+          if (_fieldErrors['specificCheckpoints'] != null) _fieldError(_fieldErrors['specificCheckpoints']!),
+          const SizedBox(height: 4),
+          Text(
+            "Départ et Arrivée font partie de toute course. Les balises non cochées n'existent pas pour celle-ci.",
+            style: EcoFont.sans(size: 12, color: EcoColors.faint, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _checkpointTile(Map<String, dynamic> checkpoint) {
+    final id = (checkpoint['id'] as num).toInt();
+    final note = checkpoint['note'] as String?;
+
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      controlAffinity: ListTileControlAffinity.leading,
+      activeColor: EcoColors.blue,
+      value: _selectedCheckpointIds.contains(id),
+      onChanged: (checked) => setState(() => checked == true ? _selectedCheckpointIds.add(id) : _selectedCheckpointIds.remove(id)),
+      title: Text(
+        note != null && note.isNotEmpty ? '${checkpoint['name']} ($note)' : checkpoint['name'] as String,
+        style: EcoFont.sans(size: 13.5),
+      ),
+    );
+  }
+
   Widget _switch(String label, bool value, ValueChanged<bool> onChanged) {
     return SwitchListTile(
       contentPadding: EdgeInsets.zero,
@@ -232,6 +302,7 @@ class _TeacherCourseCreateScreenState extends State<TeacherCourseCreateScreen> {
         'name' => 'Donnez un nom à la course.',
         'timeLimitMinutes' => 'Indiquez un nombre de minutes supérieur à 0.',
         'mode' => 'Choisissez un mode de course.',
+        'specificCheckpoints' => 'Cochez au moins une balise.',
         'mapVisibility' => 'Choisissez ce que montre la carte.',
         _ => 'Valeur refusée.',
       };

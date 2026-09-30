@@ -24,6 +24,8 @@ class TeacherLocateScreen extends StatefulWidget {
 
 class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
   List<Map<String, dynamic>> _checkpoints = [];
+  // What a radius is compared with to say it was set by hand - the server's, since it changes.
+  int _defaultTolerance = 60;
   bool _loading = true;
 
   @override
@@ -38,6 +40,7 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
     if (!mounted) return;
     setState(() {
       _checkpoints = (json['checkpoints'] as List).cast<Map<String, dynamic>>();
+      _defaultTolerance = (json['defaultToleranceMeters'] as num?)?.toInt() ?? _defaultTolerance;
       _loading = false;
     });
   }
@@ -98,7 +101,7 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
             latitude: position!.latitude,
             longitude: position.longitude,
             accuracyMeters: position.accuracy,
-            toleranceMeters: (checkpoint['toleranceMeters'] as num?)?.toInt() ?? 20,
+            toleranceMeters: (checkpoint['toleranceMeters'] as num?)?.toInt() ?? 60,
             locatedCount: (json['locatedCount'] as num).toInt(),
             totalCount: (json['totalCount'] as num).toInt(),
             nextCheckpointLabel: next != null ? _shortLabel(next) : null,
@@ -194,7 +197,7 @@ class _TeacherLocateScreenState extends State<TeacherLocateScreen> {
     final advised = (checkpoint['advisedToleranceMeters'] as num?)?.toInt();
     final qualifiers = <String>[
       if (note != null && note.isNotEmpty) note,
-      if (tolerance != null && tolerance != 20) 'tol. $tolerance m',
+      if (tolerance != null && tolerance != _defaultTolerance) 'tol. $tolerance m',
       if (advised != null) 'tol. conseillée $advised m',
     ];
 

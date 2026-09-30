@@ -166,6 +166,8 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     final timeLimit = (course['timeLimitMinutes'] as num?)?.toInt();
     final details = <String>[
       course['modeLabel'] as String? ?? '',
+      // « Balises spécifiques »: how many, and in order or not.
+      course['modeDetail'] as String? ?? '',
       if (timeLimit != null) '$timeLimit min',
       if (runnerCount > 0) runnerCount > 1 ? '$runnerCount coureurs' : '1 coureur',
     ].where((part) => part.isNotEmpty);
