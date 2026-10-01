@@ -8,6 +8,9 @@ import 'offline_queue_db.dart';
 // in case the connectivity plugin misses a transition) - each item is retried until it succeeds;
 // a network failure mid-drain just stops that pass, nothing is lost, the next trigger retries
 // from the same point (items are only removed after a confirmed server response).
+//
+// The PWA runs this same class; its service worker adds a second sender for when the page is
+// frozen (web/eco_sw.js), which is why a pass runs under OfflineQueueDb.exclusive().
 class QueueProcessor {
   final ApiClient _api;
   final OfflineQueueDb _queue;
@@ -19,6 +22,7 @@ class QueueProcessor {
   QueueProcessor(this._api, this._queue, this._tokenProvider);
 
   void start() {
+    _queue.runnerToken = _tokenProvider();
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
       if (!results.contains(ConnectivityResult.none)) {
         flush();
@@ -36,10 +40,12 @@ class QueueProcessor {
     if (_flushing) return;
     _flushing = true;
     try {
-      await _flushPositions();
-      await _flushSequential('scan');
-      await _flushSequential('sos');
-      await _flushSequential('app_event');
+      await _queue.exclusive(() async {
+        await _flushPositions();
+        await _flushSequential('scan');
+        await _flushSequential('sos');
+        await _flushSequential('app_event');
+      });
     } finally {
       _flushing = false;
     }

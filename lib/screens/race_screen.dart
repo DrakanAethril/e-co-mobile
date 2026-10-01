@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -77,7 +78,13 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_session.status != 'racing') return;
     final queue = context.read<OfflineQueueDb>();
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    // A browser never reports `paused`: a page put away (screen locked, another app, another tab)
+    // is `hidden`. On the phone `hidden` comes just before `paused`, so it counts on the web only -
+    // once, as one departure.
+    final left = state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        (kIsWeb && state == AppLifecycleState.hidden);
+    if (left) {
       queue.enqueue('app_event', {'type': 'left'});
     } else if (state == AppLifecycleState.resumed) {
       queue.enqueue('app_event', {'type': 'returned'});

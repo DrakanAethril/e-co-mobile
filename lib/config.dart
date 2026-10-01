@@ -13,6 +13,11 @@ import 'dart:io' show Platform;
 /// Android emulator runs in its own network namespace where "10.0.2.2" is its fixed alias for the
 /// host loopback; a real device on dev instead needs the host's LAN IP - not handled here, pass
 /// --dart-define=API_BASE_URL=http://<lan-ip> for that case too.
+///
+/// The PWA is served by moncampus itself (public/eco-app/), so in the browser the API is the
+/// page's own origin - no flag, no CORS, and the same answer in dev and in production. Its
+/// service worker (web/eco_sw.js) sends to that origin too, which is why a web build must never be
+/// given API_BASE_URL.
 const String _apiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
 
 String get apiBaseUrl {
@@ -21,7 +26,7 @@ String get apiBaseUrl {
   }
 
   if (kIsWeb) {
-    return 'http://localhost';
+    return Uri.base.origin;
   }
 
   if (Platform.isAndroid) {
