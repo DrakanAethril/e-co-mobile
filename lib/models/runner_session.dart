@@ -2,7 +2,8 @@ import 'checkpoint.dart';
 
 // Mirrors the JSON shape shared by POST /api/eco/runner/join and GET /api/eco/runner/state - the
 // latter is what "reprise après crash" rebuilds the UI from on relaunch, using the persisted
-// token (see SessionStore), instead of trusting anything the app remembered locally.
+// token (see SessionStore), instead of trusting anything the app remembered locally. Without
+// network the relaunch falls back on the last snapshot kept (toJson), until /state answers again.
 class RunnerSession {
   final int runnerId;
   final String token;
@@ -68,6 +69,24 @@ class RunnerSession {
             .map((e) => Checkpoint.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
+
+  /// The same shape as [fromJson] reads - what SessionStore keeps for a relaunch without network.
+  Map<String, dynamic> toJson() => {
+        'runnerId': runnerId,
+        'token': token,
+        'pseudo': pseudo,
+        'status': status,
+        'courseName': courseName,
+        'parcoursName': parcoursName,
+        'mode': mode,
+        if (serverModeLabel != null) 'modeLabel': serverModeLabel,
+        'mapVisibility': mapVisibility,
+        'timeLimitMinutes': timeLimitMinutes,
+        'startedAt': startedAt?.toUtc().toIso8601String(),
+        'finishedAt': finishedAt?.toUtc().toIso8601String(),
+        'validatedCheckpointIds': validatedCheckpointIds,
+        'checkpoints': checkpoints.map((c) => c.toJson()).toList(),
+      };
 
   RunnerSession copyWith({String? status, DateTime? startedAt, DateTime? finishedAt, List<int>? validatedCheckpointIds}) => RunnerSession(
         runnerId: runnerId,

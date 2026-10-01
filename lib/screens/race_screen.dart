@@ -33,6 +33,8 @@ class RaceScreen extends StatefulWidget {
 class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
   late RunnerSession _session;
   late final QueueProcessor _queueProcessor;
+  // Kept from initState: dispose() may not look its providers up any more.
+  late final LocationService _location;
   Timer? _chronoTimer;
   Timer? _refreshTimer;
   Duration _elapsed = Duration.zero;
@@ -43,6 +45,10 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
   // by a refresh after an offline scan. Relaunching on a finished race does not reopen it: the
   // finished card carries the button.
   bool _summaryOpened = false;
+  // A « left » recorded and not yet answered by a « returned »: one departure is one event, though
+  // the platform reports several states on the way out (hidden then detached in a browser that
+  // reloads the page, paused then detached on a phone that kills the app).
+  bool _awayFromApp = false;
 
   @override
   void initState() {
@@ -52,11 +58,17 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
 
     final api = context.read<ApiClient>();
     final queueDb = context.read<OfflineQueueDb>();
-    _queueProcessor = QueueProcessor(api, queueDb, () => _session.token);
+    _location = context.read<LocationService>();
+    _queueProcessor = QueueProcessor(api, queueDb, () => _session.token, onRejected: _onQueuedItemRejected);
     _queueProcessor.start();
+    _remember();
 
     if (_session.status == 'racing') {
-      context.read<LocationService>().startTracking();
+      _location.startTracking();
+      // Opening on a race under way is a relaunch - the app was killed, the page reloaded - after
+      // a « left » nothing answered: without this the teacher's view kept the runner out of the
+      // app until the next time they put it away.
+      _recordAppEvent('returned');
     }
 
     _chronoTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickChrono());
@@ -70,14 +82,13 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
     _chronoTimer?.cancel();
     _refreshTimer?.cancel();
     _queueProcessor.dispose();
-    context.read<LocationService>().stopTracking();
+    _location.stopTracking();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_session.status != 'racing') return;
-    final queue = context.read<OfflineQueueDb>();
     // A browser never reports `paused`: a page put away (screen locked, another app, another tab)
     // is `hidden`. On the phone `hidden` comes just before `paused`, so it counts on the web only -
     // once, as one departure.
@@ -85,12 +96,40 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
         state == AppLifecycleState.detached ||
         (kIsWeb && state == AppLifecycleState.hidden);
     if (left) {
-      queue.enqueue('app_event', {'type': 'left'});
+      if (_awayFromApp) return;
+      _awayFromApp = true;
+      _recordAppEvent('left');
     } else if (state == AppLifecycleState.resumed) {
-      queue.enqueue('app_event', {'type': 'returned'});
+      if (_awayFromApp) {
+        _awayFromApp = false;
+        _recordAppEvent('returned');
+      }
       _queueProcessor.flush();
       _refreshFromServer();
     }
+  }
+
+  /// Dated here, when it happens: queued in a dead zone, it reaches the server much later.
+  void _recordAppEvent(String type) {
+    context.read<OfflineQueueDb>().enqueue('app_event', {'type': type, 'at': DateTime.now().toUtc().toIso8601String()});
+  }
+
+  /// Kept for a relaunch without network (SessionStore): every time the screen learns something.
+  void _remember() {
+    context.read<SessionStore>().saveRunnerSnapshot(_session.toJson());
+  }
+
+  /// A scan queued without network that the server refused once it arrived - a code it does not
+  /// know. Said in the banner that promised it would be checked; the item has left the queue.
+  void _onQueuedItemRejected(QueuedItem item, ApiException refusal) {
+    if (item.type != 'scan' || !mounted) return;
+    final code = item.payload['code'] as String? ?? '';
+    setState(() {
+      _lastScanMessage = refusal.error == 'checkpointNotFound'
+          ? 'Code balise inconnu ($code) — scan refusé. Scannez à nouveau la balise.'
+          : 'Scan refusé par le serveur ($code). Scannez à nouveau la balise.';
+      _lastScanTone = _FeedbackTone.error;
+    });
   }
 
   void _tickChrono() {
@@ -115,6 +154,7 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
           _session = refreshed;
           _online = true;
         });
+        _remember();
         if (justFinished) _onFinished();
       }
     } catch (_) {
@@ -182,8 +222,9 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
       }
     });
 
+    _remember();
     if (_session.status == 'racing') {
-      context.read<LocationService>().startTracking();
+      _location.startTracking();
     } else if (_session.status == 'finished') {
       _onFinished();
     }
@@ -198,7 +239,7 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
   Future<void> _openSummary() async {
     // The race is over: no more fixes. The ones still queued are sent before the recap is asked
     // for, so the distance it shows already counts them.
-    context.read<LocationService>().stopTracking();
+    _location.stopTracking();
     await _queueProcessor.flush();
     if (!mounted) return;
 
@@ -217,7 +258,7 @@ class _RaceScreenState extends State<RaceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _quit() async {
-    context.read<LocationService>().stopTracking();
+    _location.stopTracking();
     await context.read<SessionStore>().clearRunnerSession();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(

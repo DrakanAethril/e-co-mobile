@@ -9,17 +9,32 @@ import 'offline_queue_db.dart';
 // a network failure mid-drain just stops that pass, nothing is lost, the next trigger retries
 // from the same point (items are only removed after a confirmed server response).
 //
+// A confirmed response includes a refusal (ApiException.isRefusal): the server has answered, and
+// would answer the same thing every time - an unknown checkpoint code, a token it does not know.
+// Such an item is removed and reported (onRejected) rather than retried: kept, it stood at the
+// head of its queue for ever, and a mistyped code held back every scan after it, the finish
+// included.
+//
 // The PWA runs this same class; its service worker adds a second sender for when the page is
-// frozen (web/eco_sw.js), which is why a pass runs under OfflineQueueDb.exclusive().
+// frozen (web/eco_sw.js), which is why a pass runs under OfflineQueueDb.exclusive() - and why
+// web/eco_queue.js repeats these rules.
 class QueueProcessor {
+  /// Positions per call: a long dead zone queues hundreds of them, and one oversized request
+  /// refused would otherwise be all of them.
+  static const positionBatchSize = 200;
+
   final ApiClient _api;
   final OfflineQueueDb _queue;
   final String Function() _tokenProvider;
+
+  /// An item the server refused, removed from the queue - the race screen says so for a scan.
+  final void Function(QueuedItem item, ApiException refusal)? onRejected;
+
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   Timer? _fallbackTimer;
   bool _flushing = false;
 
-  QueueProcessor(this._api, this._queue, this._tokenProvider);
+  QueueProcessor(this._api, this._queue, this._tokenProvider, {this.onRejected});
 
   void start() {
     _queue.runnerToken = _tokenProvider();
@@ -53,15 +68,20 @@ class QueueProcessor {
 
   Future<void> _flushPositions() async {
     final items = await _queue.pending(type: 'position');
-    if (items.isEmpty) return;
 
-    try {
-      await _api.runnerPositions(_tokenProvider(), items.map((i) => i.payload).toList());
-      for (final item in items) {
+    for (var start = 0; start < items.length; start += positionBatchSize) {
+      final batch = items.sublist(start, start + positionBatchSize > items.length ? items.length : start + positionBatchSize);
+      try {
+        await _api.runnerPositions(_tokenProvider(), batch.map((i) => i.payload).toList());
+      } on ApiException catch (e) {
+        if (!e.isRefusal) return;
+        // Refused for good: dropped like a sent batch, they would be refused again.
+      } catch (_) {
+        return; // Network still down - leave everything queued for the next trigger.
+      }
+      for (final item in batch) {
         await _queue.remove(item.id);
       }
-    } catch (_) {
-      // Network still down (or server error) - leave everything queued for the next trigger.
     }
   }
 
@@ -84,12 +104,18 @@ class QueueProcessor {
           case 'sos':
             await _api.runnerSos(_tokenProvider());
           case 'app_event':
-            await _api.runnerAppEvent(_tokenProvider(), item.payload['type'] as String);
+            // `at` is absent from an event queued by an older app: dated on arrival, as before.
+            await _api.runnerAppEvent(_tokenProvider(), item.payload['type'] as String, at: item.payload['at'] as String?);
         }
+      } on ApiException catch (e) {
+        if (!e.isRefusal) return; // stop this pass, preserve order for the retry
         await _queue.remove(item.id);
+        onRejected?.call(item, e);
+        continue;
       } catch (_) {
         return; // stop this pass, preserve order for the retry
       }
+      await _queue.remove(item.id);
     }
   }
 }
