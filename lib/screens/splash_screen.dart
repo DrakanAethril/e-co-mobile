@@ -35,16 +35,28 @@ class _SplashScreenState extends State<SplashScreen> {
     final token = await sessionStore.loadRunnerToken();
 
     if (token != null) {
+      RunnerSession? session;
       try {
-        final json = await api.runnerState(token);
-        final session = RunnerSession.fromJson(json);
+        session = RunnerSession.fromJson(await api.runnerState(token));
+      } on ApiException catch (e) {
+        // The server does not know this runner any more: over for good. Any other answer (a
+        // server error) is a relaunch without a usable network - the race goes on from the last
+        // state kept, and the race screen asks /state again by itself.
+        if (e.isRefusal) {
+          await sessionStore.clearRunnerSession();
+        } else {
+          session = await _lastKnown(sessionStore, token);
+        }
+      } catch (_) {
+        // No network: a relaunch in a dead zone must not end the race (nor orphan the queue).
+        session = await _lastKnown(sessionStore, token);
+      }
+      if (session != null) {
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => RaceScreen(session: session)),
+          MaterialPageRoute(builder: (_) => RaceScreen(session: session!)),
         );
         return;
-      } catch (_) {
-        await sessionStore.clearRunnerSession();
       }
     }
 
@@ -65,6 +77,19 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const JoinScreen()),
     );
+  }
+
+  /// The state kept at the last moment the race screen knew it. Without one (an app updated
+  /// offline from a version that kept none) the token is left in place: the next launch with
+  /// network resumes the race from /state.
+  Future<RunnerSession?> _lastKnown(SessionStore sessionStore, String token) async {
+    final snapshot = await sessionStore.loadRunnerSnapshot(token);
+    if (snapshot == null) return null;
+    try {
+      return RunnerSession.fromJson(snapshot);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

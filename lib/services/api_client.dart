@@ -14,6 +14,11 @@ class ApiException implements Exception {
   final Map<String, dynamic> data;
   ApiException(this.statusCode, this.error, [this.data = const {}]);
 
+  /// The server answered and said no for good: sending the same call again would get the same
+  /// answer (an unknown checkpoint code, a runner token it does not know). A server error, a
+  /// timeout or a rate limit is not a refusal - the call is worth making again later.
+  bool get isRefusal => statusCode >= 400 && statusCode < 500 && statusCode != 408 && statusCode != 429;
+
   @override
   String toString() => 'ApiException($statusCode, $error)';
 }
@@ -80,7 +85,15 @@ class ApiClient {
   }
 
   Map<String, dynamic> _decode(http.Response response) {
-    final data = jsonDecode(response.body.isEmpty ? '{}' : response.body) as Map<String, dynamic>;
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body.isEmpty ? '{}' : response.body) as Map<String, dynamic>;
+    } on FormatException {
+      // An error page rather than JSON (a proxy, a deploy under way): still an answer with a
+      // status, which is what decides whether the call is worth making again (isRefusal).
+      if (response.statusCode >= 400) throw ApiException(response.statusCode, 'unknown');
+      rethrow;
+    }
     if (response.statusCode >= 400) {
       throw ApiException(response.statusCode, data['error'] as String? ?? data['message'] as String? ?? 'unknown', data);
     }
@@ -124,8 +137,10 @@ class ApiClient {
     await _post('/api/eco/runner/sos', {'token': token});
   }
 
-  Future<void> runnerAppEvent(String token, String type) async {
-    await _post('/api/eco/runner/app-events', {'token': token, 'type': type});
+  /// [at] is when the runner left or came back, in UTC: an event queued without network is sent
+  /// long after, and the server would otherwise date it on its arrival.
+  Future<void> runnerAppEvent(String token, String type, {String? at}) async {
+    await _post('/api/eco/runner/app-events', {'token': token, 'type': type, if (at != null) 'at': at});
   }
 
   // --- Teacher session ---

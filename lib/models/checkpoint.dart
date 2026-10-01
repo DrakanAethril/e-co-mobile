@@ -43,4 +43,16 @@ class Checkpoint {
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'position': position,
+        'type': type,
+        'toleranceMeters': toleranceMeters,
+        'isValidated': isValidated,
+        'isNext': isNext,
+        'latitude': latitude,
+        'longitude': longitude,
+      };
 }

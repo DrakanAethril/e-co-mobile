@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
@@ -46,6 +47,9 @@ class _ScanScreenState extends State<ScanScreen> {
   final MobileScannerController _controller = MobileScannerController();
   bool _handled = false;
   double? _accuracyMeters;
+  // The QR the server just refused: the camera keeps reading it many times a second, and each
+  // reading would be refused again.
+  String? _refusedCode;
 
   @override
   void initState() {
@@ -72,7 +76,7 @@ class _ScanScreenState extends State<ScanScreen> {
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_handled) return;
     final code = capture.barcodes.firstOrNull?.rawValue;
-    if (code == null || code.isEmpty) return;
+    if (code == null || code.isEmpty || code == _refusedCode) return;
     _handled = true;
     await _submit(code, method: 'qr_scan');
   }
@@ -82,7 +86,6 @@ class _ScanScreenState extends State<ScanScreen> {
     final scannedAt = DateTime.now().toUtc().toIso8601String();
     final api = context.read<ApiClient>();
     final locationService = context.read<LocationService>();
-    final queue = context.read<OfflineQueueDb>();
     final position = await locationService.currentPosition();
 
     // Without a GPS fix the server can never compute a distance and the scan is guaranteed to
@@ -109,20 +112,43 @@ class _ScanScreenState extends State<ScanScreen> {
         toleranceMeters: json['toleranceMeters'] as int?,
         runnerStatus: json['runnerStatus'] as String?,
       ));
+    } on ApiException catch (e) {
+      if (e.isRefusal) {
+        // The server answered: queued, this scan would be refused again on every pass - it used
+        // to sit at the head of the queue and hold back every scan after it. Said now instead.
+        _refused(code, e);
+      } else {
+        await _queue(code, method, position, scannedAt);
+      }
     } catch (_) {
-      // Offline (or the server is briefly unreachable) - queue it, screen 4c/1b's "hors réseau,
-      // synchronisé automatiquement" note. The result stays unknown until the next successful
-      // /state refresh in RaceScreen.
-      await queue.enqueue('scan', {
-        'code': code,
-        'method': method,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'scannedAt': scannedAt,
-      });
-      if (!mounted) return;
-      Navigator.of(context).pop(ScanResult(queued: true));
+      await _queue(code, method, position, scannedAt);
     }
+  }
+
+  // Offline (or the server is briefly unreachable, or erring) - queue it, screen 4c/1b's "hors
+  // réseau, synchronisé automatiquement" note. The result stays unknown until the next successful
+  // /state refresh in RaceScreen.
+  Future<void> _queue(String code, String method, Position position, String scannedAt) async {
+    await context.read<OfflineQueueDb>().enqueue('scan', {
+      'code': code,
+      'method': method,
+      'latitude': position.latitude,
+      'longitude': position.longitude,
+      'scannedAt': scannedAt,
+    });
+    if (!mounted) return;
+    Navigator.of(context).pop(ScanResult(queued: true));
+  }
+
+  void _refused(String code, ApiException refusal) {
+    _refusedCode = code;
+    _handled = false;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(refusal.error == 'checkpointNotFound'
+          ? 'Code balise inconnu — vérifiez-le et réessayez.'
+          : 'Scan refusé par le serveur — réessayez.'),
+    ));
   }
 
   Future<void> _showManualCodeDialog() async {
