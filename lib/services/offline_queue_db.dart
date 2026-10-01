@@ -1,11 +1,13 @@
-import 'dart:convert';
-import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
+import 'offline_queue_storage.dart';
 
 // Persisted queue of not-yet-synced runner events (scan/position/sos/app_event) - the "offline-
 // first obligatoire" requirement (design/design_campus_manager/README.md's e-CO section): every
 // write survives an app kill/zone-blanche gap and is replayed once QueueProcessor sees the
 // network come back, in the order it was recorded (important for scans - see that class).
+//
+// Where it is kept depends on the platform (offline_queue_storage.dart): a SQLite table on the
+// phone, IndexedDB in the browser - the PWA, whose service worker can then send what is left when
+// the page itself no longer runs (web/eco_queue.js).
 class QueuedItem {
   final int id;
   final String type;
@@ -15,56 +17,22 @@ class QueuedItem {
 }
 
 class OfflineQueueDb {
-  static Database? _db;
+  final OfflineQueueStorage _storage = OfflineQueueStorage();
 
-  Future<Database> _database() async {
-    if (_db != null) return _db!;
-    final path = join(await getDatabasesPath(), 'eco_offline_queue.db');
-    _db = await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) => db.execute(
-        'CREATE TABLE queue_item (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL)',
-      ),
-    );
-    return _db!;
-  }
+  /// The runner the items are recorded for, set by QueueProcessor when a race screen opens. Only
+  /// the web keeps it, on each item: its service worker sends them without the page, so it has no
+  /// session to ask. The phone sends with the session's token and ignores it.
+  String? runnerToken;
 
-  Future<void> enqueue(String type, Map<String, dynamic> payload) async {
-    final db = await _database();
-    await db.insert('queue_item', {
-      'type': type,
-      'payload': jsonEncode(payload),
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
+  Future<void> enqueue(String type, Map<String, dynamic> payload) => _storage.enqueue(type, payload, runnerToken);
 
-  Future<List<QueuedItem>> pending({String? type}) async {
-    final db = await _database();
-    final rows = await db.query(
-      'queue_item',
-      where: type != null ? 'type = ?' : null,
-      whereArgs: type != null ? [type] : null,
-      orderBy: 'created_at ASC',
-    );
-    return rows
-        .map((row) => QueuedItem(
-              id: row['id'] as int,
-              type: row['type'] as String,
-              payload: jsonDecode(row['payload'] as String) as Map<String, dynamic>,
-              createdAt: DateTime.parse(row['created_at'] as String),
-            ))
-        .toList();
-  }
+  Future<List<QueuedItem>> pending({String? type}) => _storage.pending(type: type);
 
-  Future<void> remove(int id) async {
-    final db = await _database();
-    await db.delete('queue_item', where: 'id = ?', whereArgs: [id]);
-  }
+  Future<void> remove(int id) => _storage.remove(id);
 
-  Future<int> count() async {
-    final db = await _database();
-    final result = await db.rawQuery('SELECT COUNT(*) as c FROM queue_item');
-    return Sqflite.firstIntValue(result) ?? 0;
-  }
+  Future<int> count() => _storage.count();
+
+  /// Runs one pass of sending. In the browser the service worker may be sending the same queue at
+  /// that moment (background sync): one pass at a time, or both would post the same items.
+  Future<void> exclusive(Future<void> Function() pass) => _storage.exclusive(pass);
 }

@@ -67,6 +67,17 @@ Spectral (assets/google_fonts/Spectral-*.ttf)
 
 
 --------------------------------------------------------------------------------
+ZXing (web build only)
+--------------------------------------------------------------------------------
+
+web/zxing/zxing.min.js is @zxing/library 0.21.3 (https://github.com/zxing-js/library),
+the QR reader mobile_scanner uses in a browser, vendored so that the PWA can scan
+without network instead of fetching it from unpkg.com. Its LICENSE file (Apache
+License 2.0, copyright the ZXing authors) is kept alongside it, in web/zxing/;
+the package's own metadata declares MIT.
+
+
+--------------------------------------------------------------------------------
 Third-party packages
 --------------------------------------------------------------------------------
 
