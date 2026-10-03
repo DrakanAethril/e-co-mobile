@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/runner_session.dart';
 import '../services/api_client.dart';
+import '../services/join_link.dart';
 import '../services/session_store.dart';
 import '../theme.dart';
 import 'join_screen.dart';
@@ -15,6 +17,8 @@ import 'teacher_login_screen.dart';
 // screen again. An invalid/expired token (course was deleted, etc.) just falls through to the
 // normal home choice. Then « Rester connecté »: a remembered teacher session reopens the teacher
 // menu (ApiClient.restoreTeacherSession) - an ended one lands on the login screen, saying so.
+// Between the two, a course poster's link (`?code=`, the web build only): whoever scans it came to
+// join that course, a teacher testing their own poster included - a race under way still wins.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -58,6 +62,15 @@ class _SplashScreenState extends State<SplashScreen> {
         );
         return;
       }
+    }
+
+    final joinCode = kIsWeb ? joinCodeFromUri(Uri.base) : null;
+    if (joinCode != null) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => JoinScreen(initialCode: joinCode)),
+      );
+      return;
     }
 
     final restore = await api.restoreTeacherSession();
