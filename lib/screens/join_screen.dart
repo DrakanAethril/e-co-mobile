@@ -12,8 +12,12 @@ import 'teacher_login_screen.dart';
 
 // Handoff screen 3d - "Rejoindre une course". No account: pseudo + course code is enough, and the
 // code is confirmed back as it is typed so a mistyped character is caught before the button.
+// Opened from a course poster's QR code, the code is already there (`initialCode`) and the
+// runner only has a pseudo to type.
 class JoinScreen extends StatefulWidget {
-  const JoinScreen({super.key});
+  final String? initialCode;
+
+  const JoinScreen({super.key, this.initialCode});
 
   @override
   State<JoinScreen> createState() => _JoinScreenState();
@@ -33,6 +37,11 @@ class _JoinScreenState extends State<JoinScreen> {
   void initState() {
     super.initState();
     _codeController.addListener(_onCodeChanged);
+    final code = widget.initialCode;
+    if (code != null) {
+      // Through the listener, so the course is looked up and confirmed as if it had been typed.
+      _codeController.text = code;
+    }
   }
 
   @override
@@ -119,7 +128,12 @@ class _JoinScreenState extends State<JoinScreen> {
           'Pas de compte : un pseudo et le code de la course suffisent.',
       fields: [
         const EcoFieldLabel('Votre pseudo'),
-        TextField(controller: _pseudoController, textInputAction: TextInputAction.next),
+        TextField(
+          controller: _pseudoController,
+          autofocus: widget.initialCode != null,
+          textInputAction: widget.initialCode != null ? TextInputAction.go : TextInputAction.next,
+          onSubmitted: widget.initialCode != null ? (_) => _join() : null,
+        ),
         const SizedBox(height: 16),
         const EcoFieldLabel('Code de la course'),
         TextField(
